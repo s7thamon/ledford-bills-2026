@@ -1,0 +1,196 @@
+<script setup lang="ts">
+import type { TableColumn } from '@nuxt/ui'
+
+useHead({ title: 'Reimbursements' })
+const run = useApi()
+const toast = useToast()
+const { user, session } = useUserSession()
+const me = computed(() => user.value!.id)
+const adminMode = computed(() => !!session.value?.adminMode)
+
+type Sort = 'createdAt' | 'name' | 'owedCents' | 'status'
+const resolved = ref(false)
+const page = ref(1)
+const sort = ref<Sort>('createdAt')
+const dir = ref<'asc' | 'desc'>('desc')
+watch(resolved, () => (page.value = 1))
+
+const { data: users } = await useFetch('/api/users', { key: 'users', default: () => [] })
+const { data, refresh, status } = await useFetch('/api/reimbursements', {
+  key: 'reimbursements',
+  query: computed(() => ({ resolved: resolved.value, page: page.value, sort: sort.value, dir: dir.value })),
+  default: () => ({ items: [], total: 0, pageSize: 10 })
+})
+type Item = (typeof data.value.items)[number]
+
+const firstName = (id: number) => users.value.find(u => u.id === id)?.name.split(' ')[0] ?? 'Someone'
+const otherUser = computed(() => users.value.find(u => u.id !== me.value))
+
+function sortBy(key: Sort) {
+  if (sort.value === key) dir.value = dir.value === 'asc' ? 'desc' : 'asc'
+  else {
+    sort.value = key
+    dir.value = key === 'createdAt' ? 'desc' : 'asc'
+  }
+  page.value = 1
+}
+const sortIcon = (key: Sort) => sort.value !== key ? 'i-lucide-arrow-up-down' : dir.value === 'asc' ? 'i-lucide-arrow-up-narrow-wide' : 'i-lucide-arrow-down-wide-narrow'
+
+const statusMeta = {
+  awaiting: { label: 'Awaiting Payment', color: 'warning' },
+  sent: { label: 'Payment Sent', color: 'info' },
+  received: { label: 'Received', color: 'success' }
+} as const
+
+function flow(r: Item) {
+  return r.createdBy === me.value ? `${firstName(r.otherUserId)} owes you` : `You owe ${firstName(r.createdBy)}`
+}
+function description(r: Item) {
+  const amount = formatMoney(r.owedCents)
+  const s = reimbursementStatus(r)
+  const mine = r.createdBy === me.value
+  if (s === 'received') return mine ? 'You confirmed receipt.' : `${firstName(r.createdBy)} confirmed receipt.`
+  if (s === 'sent') return mine ? `${firstName(r.otherUserId)} marked this as sent. Confirm once it arrives.` : `You marked this as sent. Waiting for ${firstName(r.createdBy)} to confirm.`
+  return mine ? `${firstName(r.otherUserId)} still owes you ${amount}.` : `You still owe ${firstName(r.createdBy)} ${amount}.`
+}
+
+const canSend = (r: Item) => canMarkTransferComplete(r, me.value) || (adminMode.value && reimbursementStatus(r) === 'awaiting')
+const canConfirm = (r: Item) => canMarkReimbursementComplete(r, me.value) || (adminMode.value && reimbursementStatus(r) === 'sent')
+
+// Create
+const form = reactive({ name: '', owed: '' })
+const creating = ref(false)
+async function create() {
+  const owedCents = parseAmount(form.owed)
+  if (!form.name.trim() || owedCents <= 0) {
+    toast.add({ title: 'Enter a name and an amount above zero.', color: 'warning' })
+    return
+  }
+  creating.value = true
+  const ok = await run(() => $fetch('/api/reimbursements', { method: 'POST', body: { name: form.name, owedCents } }), 'Reimbursement created')
+  creating.value = false
+  if (!ok) return
+  Object.assign(form, { name: '', owed: '' })
+  await refresh()
+}
+
+const busy = ref<string | null>(null)
+async function act(key: string, url: string, success: string) {
+  busy.value = key
+  const ok = await run(() => $fetch(url, { method: 'POST' }), success)
+  busy.value = null
+  if (ok) await refresh()
+}
+
+const columns: TableColumn<Item>[] = [
+  { accessorKey: 'createdAt', header: 'Added' },
+  { accessorKey: 'name', header: 'Name', meta: { class: { td: 'min-w-56' } } },
+  { accessorKey: 'owedCents', header: 'Owed', meta: { class: { th: 'text-right', td: 'text-right' } } },
+  { id: 'flow', header: 'Who' },
+  { id: 'status', header: 'Status' },
+  { id: 'actions', header: '', meta: { class: { th: 'text-right', td: 'text-right' } } }
+]
+
+const editOpen = ref(false)
+const editingId = ref<number | null>(null)
+const editing = computed(() => data.value.items.find(i => i.id === editingId.value) ?? null)
+function openEdit(item: Item) {
+  editingId.value = item.id
+  editOpen.value = true
+}
+</script>
+
+<template>
+  <div class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-semibold text-highlighted">
+          Reimbursements
+        </h1>
+        <p class="text-sm text-muted">
+          Ask {{ otherUser?.name.split(' ')[0] ?? 'the other person' }} to pay you back.
+        </p>
+      </div>
+      <form class="flex flex-wrap items-center gap-3" autocomplete="off" @submit.prevent="create">
+        <UInput v-model="form.name" icon="i-lucide-receipt-text" placeholder="What for" aria-label="Name" class="w-56" />
+        <UInput v-model="form.owed" icon="i-lucide-dollar-sign" placeholder="Amount owed" aria-label="Amount owed" inputmode="decimal" class="w-40" />
+        <UButton type="submit" :loading="creating" icon="i-lucide-plus">
+          New
+        </UButton>
+      </form>
+    </div>
+
+    <div class="flex justify-end">
+      <USwitch v-model="resolved" label="Show completed" />
+    </div>
+
+    <UTable :data="data.items" :columns="columns" :loading="status === 'pending'" empty="Nothing waiting. All settled up.">
+      <template #createdAt-header>
+        <UButton color="neutral" variant="link" class="-mx-2.5 font-semibold" :trailing-icon="sortIcon('createdAt')" label="Added" @click="sortBy('createdAt')" />
+      </template>
+      <template #name-header>
+        <UButton color="neutral" variant="link" class="-mx-2.5 font-semibold" :trailing-icon="sortIcon('name')" label="Name" @click="sortBy('name')" />
+      </template>
+      <template #owedCents-header>
+        <UButton color="neutral" variant="link" class="-mx-2.5 font-semibold" :trailing-icon="sortIcon('owedCents')" label="Owed" @click="sortBy('owedCents')" />
+      </template>
+      <template #status-header>
+        <UButton color="neutral" variant="link" class="-mx-2.5 font-semibold" :trailing-icon="sortIcon('status')" label="Status" @click="sortBy('status')" />
+      </template>
+
+      <template #createdAt-cell="{ row }">
+        <span class="tabular-nums text-muted">{{ dotDate(new Date(row.original.createdAt).toLocaleDateString('en-CA')) }}</span>
+      </template>
+      <template #name-cell="{ row }">
+        <div>{{ row.original.name }}</div>
+        <div v-if="row.original.notes" class="text-xs text-muted whitespace-pre-line">
+          {{ row.original.notes }}
+        </div>
+      </template>
+      <template #owedCents-cell="{ row }">
+        <span class="tabular-nums">{{ formatMoney(row.original.owedCents) }}</span>
+      </template>
+      <template #flow-cell="{ row }">
+        <div class="text-sm">
+          {{ flow(row.original) }}
+        </div>
+        <div class="text-xs text-muted">
+          {{ description(row.original) }}
+        </div>
+      </template>
+      <template #status-cell="{ row }">
+        <UBadge :color="statusMeta[reimbursementStatus(row.original)].color" variant="soft" class="rounded-full">
+          {{ statusMeta[reimbursementStatus(row.original)].label }}
+        </UBadge>
+      </template>
+      <template #actions-cell="{ row }">
+        <div class="inline-flex items-center gap-1">
+          <UButton
+            v-if="canSend(row.original)"
+            size="sm"
+            variant="outline"
+            :loading="busy === `send:${row.original.id}`"
+            @click="act(`send:${row.original.id}`, `/api/reimbursements/${row.original.id}/transfer`, 'Transfer marked complete')"
+          >
+            Mark Sent
+          </UButton>
+          <UButton
+            v-if="canConfirm(row.original)"
+            size="sm"
+            :loading="busy === `done:${row.original.id}`"
+            @click="act(`done:${row.original.id}`, `/api/reimbursements/${row.original.id}/complete`, 'Reimbursement completed')"
+          >
+            Confirm Received
+          </UButton>
+          <UButton v-if="canEditReimbursement(row.original, me)" icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit" @click="openEdit(row.original)" />
+        </div>
+      </template>
+    </UTable>
+
+    <div v-if="data.total > data.pageSize" class="flex justify-end">
+      <UPagination v-model:page="page" :total="data.total" :items-per-page="data.pageSize" />
+    </div>
+
+    <ReimbursementEditModal v-model:open="editOpen" :item="editing" @changed="refresh" />
+  </div>
+</template>

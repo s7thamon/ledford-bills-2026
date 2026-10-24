@@ -1,0 +1,18 @@
+# Reference only, never commit
+ledford-bills-flux_old/
+
+node_modules
+.nuxt
+.output
+.data
+.nitro
+.cache
+dist
+logs
+*.log
+.DS_Store
+.idea
+.env
+.env.*
+!.env.example
+.playwright-mcp

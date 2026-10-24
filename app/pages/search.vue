@@ -1,0 +1,85 @@
+<script setup lang="ts">
+import type { TableColumn } from '@nuxt/ui'
+
+const route = useRoute()
+const q = computed(() => String(route.query.q ?? ''))
+useHead({ title: () => q.value ? `Search: ${q.value}` : 'Search' })
+
+const { user } = useUserSession()
+const { data: users } = await useFetch('/api/users', { key: 'users', default: () => [] })
+const { data: results, status } = await useFetch('/api/bills/search', { key: 'search', query: computed(() => ({ q: q.value })), default: () => [] })
+type Bill = (typeof results.value)[number]
+
+const share = (bill: Bill) => isCustomSplit(bill.participants.map(p => p.amountCents))
+  ? bill.participants.find(p => p.userId === user.value?.id)?.amountCents ?? 0
+  : equalShare(bill.amountCents, users.value.length)
+
+const chartData = computed(() => [...results.value].reverse().map(b => ({ date: dotDate(b.addedOn), amount: b.amountCents / 100 })))
+const average = computed(() => results.value.length ? Math.round(results.value.reduce((s, b) => s + b.amountCents, 0) / results.value.length) : 0)
+
+const columns: TableColumn<Bill>[] = [
+  { accessorKey: 'addedOn', header: 'Added' },
+  { accessorKey: 'name', header: 'Name' },
+  { accessorKey: 'amountCents', header: 'Amount', meta: { class: { th: 'text-right', td: 'text-right' } } },
+  { id: 'share', header: 'Each/Split', meta: { class: { th: 'text-right', td: 'text-right' } } },
+  { id: 'status', header: 'Status', meta: { class: { th: 'text-center', td: 'text-center' } } }
+]
+</script>
+
+<template>
+  <div class="space-y-6">
+    <div>
+      <h1 class="text-2xl font-semibold text-highlighted">
+        {{ q ? `Results for "${q}"` : 'Search bills' }}
+      </h1>
+      <p v-if="q" class="text-sm text-muted">
+        {{ results.length }} bill{{ results.length === 1 ? '' : 's' }}<template v-if="results.length">, averaging {{ formatMoney(average) }}</template>
+      </p>
+      <p v-else class="text-sm text-muted">
+        Use the search box in the header to find bills by name.
+      </p>
+    </div>
+
+    <div v-if="chartData.length > 1" class="rounded-lg bg-elevated/60 p-4">
+      <UChart
+        type="line"
+        :data="chartData"
+        index="date"
+        :categories="[{ key: 'amount', label: 'Amount' }]"
+        :format="v => formatMoney(Math.round(v * 100))"
+        :height="260"
+        points
+        curve="monotone"
+        aria-label="Bill amount over time"
+      />
+    </div>
+
+    <UTable v-if="q" :data="results" :columns="columns" :loading="status === 'pending'" empty="No bills match.">
+      <template #addedOn-cell="{ row }">
+        <NuxtLink :to="{ path: '/', query: { month: row.original.addedOn.slice(0, 7) } }" class="tabular-nums text-muted hover:text-primary">
+          {{ dotDate(row.original.addedOn) }}
+        </NuxtLink>
+      </template>
+      <template #amountCents-cell="{ row }">
+        <span class="tabular-nums">{{ formatMoney(row.original.amountCents) }}</span>
+      </template>
+      <template #share-cell="{ row }">
+        <span class="inline-flex items-center gap-1 tabular-nums">
+          <UIcon v-if="isCustomSplit(row.original.participants.map(p => p.amountCents))" name="i-lucide-arrow-left-right" class="size-3.5 text-muted" />
+          {{ formatMoney(share(row.original)) }}
+        </span>
+      </template>
+      <template #status-cell="{ row }">
+        <UBadge v-if="row.original.cardPaidAt" color="primary" variant="soft" class="rounded-full">
+          Settled
+        </UBadge>
+        <UBadge v-else-if="allParticipantsPaid(row.original)" color="info" variant="soft" class="rounded-full">
+          Card due
+        </UBadge>
+        <UBadge v-else color="warning" variant="soft" class="rounded-full">
+          Unpaid
+        </UBadge>
+      </template>
+    </UTable>
+  </div>
+</template>

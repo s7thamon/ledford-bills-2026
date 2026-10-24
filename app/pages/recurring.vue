@@ -1,0 +1,129 @@
+<script setup lang="ts">
+import type { TableColumn } from '@nuxt/ui'
+
+useHead({ title: 'Recurring' })
+const run = useApi()
+const toast = useToast()
+
+const { data: users } = await useFetch('/api/users', { key: 'users', default: () => [] })
+const { data: items, refresh, status } = await useFetch('/api/recurring', { key: 'recurring', default: () => [] })
+type Item = (typeof items.value)[number]
+
+const userName = (id: number | null) => users.value.find(u => u.id === id)?.name.split(' ')[0] ?? 'Someone'
+const typeItems = [{ label: 'Bill', value: 'bill' }, { label: 'Reimbursement', value: 'reimbursement' }]
+const userItems = computed(() => users.value.map(u => ({ label: `${u.name} owes`, value: u.id })))
+
+// Create
+const form = reactive({ type: 'bill' as Item['type'], name: '', amount: '', day: undefined as number | undefined, otherUserId: undefined as number | undefined })
+const creating = ref(false)
+async function create() {
+  const amountCents = parseAmount(form.amount)
+  if (!form.name.trim() || amountCents <= 0 || !form.day) {
+    toast.add({ title: 'Enter a name, an amount above zero, and a day.', color: 'warning' })
+    return
+  }
+  creating.value = true
+  const ok = await run(() => $fetch('/api/recurring', {
+    method: 'POST',
+    body: { type: form.type, name: form.name, amountCents, dayOfMonth: form.day, otherUserId: form.type === 'reimbursement' ? form.otherUserId : null }
+  }), form.type === 'bill' ? 'Recurring bill created' : 'Recurring reimbursement created')
+  creating.value = false
+  if (!ok) return
+  Object.assign(form, { name: '', amount: '', day: undefined })
+  await refresh()
+}
+
+// Row helpers
+const sameDay = (item: Item) => items.value.filter(i => i.dayOfMonth === item.dayOfMonth)
+const isFirst = (item: Item) => sameDay(item)[0]?.id === item.id
+const isLast = (item: Item) => sameDay(item).at(-1)?.id === item.id
+
+async function move(item: Item, direction: -1 | 1) {
+  if (await run(() => $fetch(`/api/recurring/${item.id}/move`, { method: 'POST', body: { direction } }))) await refresh()
+}
+async function setActive(item: Item, active: boolean) {
+  if (await run(() => $fetch(`/api/recurring/${item.id}/active`, { method: 'PUT', body: { active } }), active ? 'Resumed' : 'Paused')) await refresh()
+}
+
+const monthlyTotal = computed(() => items.value.filter(i => i.active && i.type === 'bill').reduce((s, i) => s + i.amountCents, 0))
+
+const columns: TableColumn<Item>[] = [
+  { accessorKey: 'dayOfMonth', header: 'Day' },
+  { accessorKey: 'name', header: 'Name', meta: { class: { td: 'min-w-56' } } },
+  { accessorKey: 'type', header: 'Type' },
+  { accessorKey: 'amountCents', header: 'Amount', meta: { class: { th: 'text-right', td: 'text-right' } } },
+  { id: 'split', header: 'Split / Owed by' },
+  { accessorKey: 'active', header: 'Active', meta: { class: { th: 'text-center', td: 'text-center' } } },
+  { id: 'order', header: 'Order', meta: { class: { th: 'text-center', td: 'text-center' } } },
+  { id: 'actions', header: '', meta: { class: { td: 'w-px' } } }
+]
+
+const editOpen = ref(false)
+const editingId = ref<number | null>(null)
+const editing = computed(() => items.value.find(i => i.id === editingId.value) ?? null)
+function openEdit(item: Item) {
+  editingId.value = item.id
+  editOpen.value = true
+}
+</script>
+
+<template>
+  <div class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-semibold text-highlighted">
+          Recurring
+        </h1>
+        <p class="text-sm text-muted">
+          Added automatically each month just after midnight. Active bills total {{ formatMoney(monthlyTotal) }} a month.
+        </p>
+      </div>
+
+      <form class="flex flex-wrap items-center gap-3" autocomplete="off" @submit.prevent="create">
+        <USelect v-model="form.type" :items="typeItems" class="w-40" aria-label="Type" />
+        <UInput v-model="form.name" icon="i-lucide-receipt-text" placeholder="Name" aria-label="Name" class="w-48" />
+        <USelect v-if="form.type === 'reimbursement'" v-model="form.otherUserId" :items="userItems" placeholder="Who owes" class="w-40" aria-label="Who owes" />
+        <UInput v-model="form.amount" icon="i-lucide-dollar-sign" :placeholder="form.type === 'reimbursement' ? 'Owed' : 'Amount'" aria-label="Amount" inputmode="decimal" class="w-32" />
+        <UInputNumber v-model="form.day" :min="1" :max="31" placeholder="Day" aria-label="Day of month" class="w-28" />
+        <UButton type="submit" :loading="creating" icon="i-lucide-plus">
+          New
+        </UButton>
+      </form>
+    </div>
+
+    <UTable :data="items" :columns="columns" :loading="status === 'pending'" sticky empty="No recurring bills yet." :meta="{ class: { tr: (row) => row.original.active ? '' : 'opacity-50' } }">
+      <template #dayOfMonth-cell="{ row }">
+        <span class="tabular-nums text-muted">{{ row.original.dayOfMonth }}</span>
+      </template>
+      <template #type-cell="{ row }">
+        <UBadge :color="row.original.type === 'bill' ? 'primary' : 'warning'" variant="soft" class="rounded-full capitalize">
+          {{ row.original.type }}
+        </UBadge>
+      </template>
+      <template #amountCents-cell="{ row }">
+        <span class="tabular-nums">{{ formatMoney(row.original.amountCents) }}</span>
+      </template>
+      <template #split-cell="{ row }">
+        <span v-if="row.original.type === 'reimbursement'" class="text-sm">{{ userName(row.original.otherUserId) }} owes</span>
+        <span v-else class="inline-flex items-center gap-1 text-sm tabular-nums">
+          <UIcon v-if="isCustomSplit(row.original.participants.map(p => p.amountCents))" name="i-lucide-arrow-left-right" class="size-3.5 text-muted" />
+          {{ row.original.participants.map(p => `${userName(p.userId)} ${formatMoney(p.amountCents)}`).join(' · ') }}
+        </span>
+      </template>
+      <template #active-cell="{ row }">
+        <USwitch :model-value="row.original.active" :aria-label="`Active: ${row.original.name}`" @update:model-value="v => setActive(row.original, v)" />
+      </template>
+      <template #order-cell="{ row }">
+        <div class="inline-flex">
+          <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="ghost" :disabled="isFirst(row.original)" aria-label="Move up" @click="move(row.original, -1)" />
+          <UButton icon="i-lucide-chevron-down" size="xs" color="neutral" variant="ghost" :disabled="isLast(row.original)" aria-label="Move down" @click="move(row.original, 1)" />
+        </div>
+      </template>
+      <template #actions-cell="{ row }">
+        <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit" @click="openEdit(row.original)" />
+      </template>
+    </UTable>
+
+    <RecurringEditModal v-model:open="editOpen" :item="editing" :users="users" @changed="refresh" />
+  </div>
+</template>
