@@ -24,7 +24,7 @@ const DETAIL = /^([^:]{1,30}):\s+(.+)$/
 export function renderMailHtml(message: MailMessage): string {
   const details = message.lines.map(l => l.match(DETAIL)).filter(m => m !== null)
   const paragraphs = message.lines.filter(l => !DETAIL.test(l))
-  const font = 'Poppins,-apple-system,Segoe UI,Helvetica,Arial,sans-serif'
+  const font = 'Public Sans,-apple-system,Segoe UI,Helvetica,Arial,sans-serif'
   return `<!doctype html>
 <html><body style="margin:0;padding:0;background:#f1f5f7">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f7;padding:32px 12px;font-family:${font}">
