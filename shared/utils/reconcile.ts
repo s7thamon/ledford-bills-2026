@@ -77,6 +77,7 @@ export const daysApart = (a: string, b: string) => Math.abs(Date.parse(a.slice(0
 
 /** Exact-sum subset of min..max items, fewest items first. Inputs are small (a few days of one store). */
 export function findSubset<T extends string | number>(items: { id: T, cents: number }[], target: number, min: number, max: number): T[] | null {
+  // shortcut: only the first 16 candidates are searched (keeps it instant); widen if real statements need more.
   const pool = items.slice(0, 16)
   for (let size = min; size <= Math.min(max, pool.length); size++) {
     const pick: number[] = []

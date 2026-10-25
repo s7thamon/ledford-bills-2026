@@ -76,6 +76,8 @@ async function reload() {
   if (!data) return
   bills.value = data.bills
   refunds.value = data.refunds
+  // Snapshots may point at bills that changed or left the range.
+  history.value = []
   rematch()
 }
 
@@ -214,7 +216,9 @@ const pUsedBills = computed(() => new Set([...pMatches.value.flatMap(m => m.bill
 const pUsedLines = computed(() => new Set([...pMatches.value.map(m => m.lineId), ...pSuggestions.value.map(s => s.lineId)]))
 const pLeftoverLines = computed(() => lines.value.filter(l => l.kind === 'payment' && !pUsedLines.value.has(l.id)))
 const pLeftoverBills = computed(() => bills.value.filter(b => b.cardPaidAt && !pUsedBills.value.has(b.id)))
-const pOffBy = computed(() => -pLeftoverLines.value.reduce((s, l) => s + l.amountCents, 0) - pLeftoverBills.value.reduce((s, b) => s + b.cardDueCents, 0))
+// Only card payments recorded inside the statement dates should have a Citi line in this file.
+const pOffBy = computed(() => -pLeftoverLines.value.reduce((s, l) => s + l.amountCents, 0)
+  - pLeftoverBills.value.filter(b => inRange(b.cardPaidAt!.slice(0, 10))).reduce((s, b) => s + b.cardDueCents, 0))
 const checkedSum = (lineId: string) => (pChecks.value[lineId] ?? []).reduce((s, id) => s + (bill(id)?.cardDueCents ?? 0), 0)
 function toggleCheck(lineId: string, billId: number) {
   const cur = pChecks.value[lineId] ?? []
@@ -370,7 +374,8 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
               class="rounded-xl border px-3 py-2 transition"
               :class="selected.includes(l.id) ? 'border-primary bg-primary/10 ring-2 ring-primary/30' : 'border-default bg-elevated/30'"
               @click="l.kind === 'charge' && toggleSelect(l.id)"
-              @keydown.enter.prevent="l.kind === 'charge' && toggleSelect(l.id)"
+              @keydown.enter.self.prevent="l.kind === 'charge' && toggleSelect(l.id)"
+              @keydown.space.self.prevent="l.kind === 'charge' && toggleSelect(l.id)"
               @dragstart="(e: DragEvent) => { if (!selected.includes(l.id)) selected = [l.id]; e.dataTransfer?.setData('text/plain', l.id) }"
             >
               <div class="flex items-start justify-between gap-3">
@@ -427,7 +432,8 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
               class="rounded-xl border-2 border-dashed px-3 py-2 transition"
               :class="dragOver === b.id ? 'border-primary bg-primary/10' : 'border-accented'"
               @click="assignTo(b.id)"
-              @keydown.enter.prevent="assignTo(b.id)"
+              @keydown.enter.self.prevent="assignTo(b.id)"
+              @keydown.space.self.prevent="assignTo(b.id)"
               @dragover.prevent="dragOver = b.id"
               @dragleave="dragOver = null"
               @drop.prevent="dragOver = null; assignTo(b.id)"
@@ -517,7 +523,7 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
               v-for="b in pLeftoverBills"
               :key="b.id"
               :model-value="(pChecks[p.id] ?? []).includes(b.id)"
-              :label="`${b.name} · ${formatMoney(b.cardDueCents)}`"
+              :label="`${b.name} · ${formatMoney(b.cardDueCents)} · paid ${usDotDate(b.cardPaidAt!.slice(0, 10)).slice(0, 5)}`"
               class="rounded-full border border-default px-3 py-1"
               @update:model-value="toggleCheck(p.id, b.id)"
             />

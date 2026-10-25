@@ -131,6 +131,17 @@ describe('listForReconcile', async () => {
     expect(r.refunds).toEqual([{ id: refund.id, billId: rug.id, amountCents: 30000, refundedOn: '2026-09-05' }])
   })
 
+  it('leaves out refunds on personal-card bills', async () => {
+    const b = await createBill({ name: 'Personal', amountCents: 5000, createdBy: tim, addedOn: '2026-09-02' })
+    await payBoth(b.id)
+    const refund = await recordRefund(b.id, { amountCents: 1000, refundedOn: '2026-09-04' }, tim)
+    const { useDb, schema } = await import('../server/db/client')
+    const { eq } = await import('drizzle-orm')
+    // Marked personal after the refund (the app now blocks this order, older data may still have it).
+    await useDb().update(schema.bills).set({ paidWithCardOf: tim }).where(eq(schema.bills.id, b.id))
+    expect((await listForReconcile('2026-09-01', '2026-09-20')).refunds.map(r => r.id)).not.toContain(refund.id)
+  })
+
   it('creates bills on a given date', async () => {
     expect((await createBill({ name: 'Dated', amountCents: 500, createdBy: tim, addedOn: '2026-09-03' })).addedOn).toBe('2026-09-03')
   })

@@ -328,7 +328,11 @@ export async function listForReconcile(from: string, to: string): Promise<{ bill
     orderBy: [asc(bills.addedOn), asc(bills.id)]
   })
   const refundRows = await useDb().select({ id: refunds.id, billId: refunds.billId, amountCents: refunds.amountCents, refundedOn: refunds.refundedOn })
-    .from(refunds).where(between(refunds.refundedOn, start, end)).orderBy(asc(refunds.refundedOn), asc(refunds.id))
+    .from(refunds)
+    // A refund on a personal-card bill went back to that card, not Citi.
+    .innerJoin(bills, eq(bills.id, refunds.billId))
+    .where(and(between(refunds.refundedOn, start, end), isNull(bills.paidWithCardOf)))
+    .orderBy(asc(refunds.refundedOn), asc(refunds.id))
   return {
     bills: rows.map(toDto).map(b => ({
       id: b.id,
