@@ -1,4 +1,4 @@
-# Refund Credits Design
+# Refund Credits and Different-Card Bills Design
 
 ## Intent
 
@@ -9,6 +9,8 @@ Real example: a Costco rug was bought, both shares and the card were paid, then 
 The fix is to treat a refund as a **credit that gets used up by a later bill**. You each deposit that much less for the next bill, and the joint account pays Citi that much less. The app records every adjustment where it happened, so nobody has to remember "I put $7.50 less in", and the Citi statement can be matched line by line, months later if needed.
 
 Approved mockup: `.superpowers/brainstorm/29563-1792908215/content/refund-credits.html` (local reference, not committed).
+
+A second, related case is folded in. Sometimes a bill is added and both shares are paid, but the purchase actually went on someone's **personal** card, not the shared Citi card. Today the person who paid moves the whole bill amount out of the joint account to cover their card. That part works fine and stays outside the app. But the bill then sits in "Ready for Card" forever, inflates the card totals, and has no matching Citi line.
 
 ## Goals
 
@@ -22,6 +24,8 @@ Approved mockup: `.superpowers/brainstorm/29563-1792908215/content/refund-credit
   - Hovering either tag points to the other bill.
 - A small "Credits available" note above the table while any credit is unused, opening a credits history: each refund, where it was used, and the remaining balance.
 
+- Mark a bill **"Paid with different card"** and choose whose card it was. The Card column then shows a gray "Tim's card" tag instead of Pay Card, and the bill drops out of every card total, card tab and card email.
+
 ## Non-goals
 
 - **Refunds for purchases never entered in the app.** The users called this human error. The workaround is to add the purchase as a bill, then record the refund.
@@ -29,6 +33,7 @@ Approved mockup: `.superpowers/brainstorm/29563-1792908215/content/refund-credit
 - **Emails.** Recording a refund and applying a credit send no email (the users asked for quiet). Live updates still refresh other open tabs.
 - Withdrawing refund money from the joint account.
 - Applying one credit across several bills, or several credits to one bill in one step.
+- Tracking the joint-account withdrawal for a different-card bill (the users said this isn't needed).
 
 ## Anti-goals
 
@@ -98,6 +103,21 @@ For a bill with an applied credit:
 - **Totals use the reduced amounts:** "You Still Owe", the other person's amount, "Card Unpaid", "ready to pay", tab counts, the totals footer, and bulk pay. Those totals are what actually moves between accounts.
 - **Total This Month** stays the sum of bill amounts (spending added), unaffected by refunds. *Builder's call.*
 
+### Paid with different card
+
+- **Where:** an option on the bill, from the same "…" entry point. Pick a person, "Paid with Tim's card" or "Paid with Kelly's card". It can be cleared again (back to the shared card).
+- **When:** available on any bill, paid or not. People's shares stay payable as normal, because the share still goes into the joint account and the cardholder takes it out themselves.
+- **Effect:**
+  - The Card column shows a soft gray "Tim's card" tag instead of Pay Card, Paid or the dash. The tag's instant tooltip, opening above, reads "Paid with Tim's personal card; not on the shared Citi card".
+  - The bill counts in **no** card figure: Card Unpaid, ready to pay, the Card Unpaid and Ready for Card tabs and counts, bulk "Pay Selected Card", "Pay Card for All", the totals footer card math, or the Card Ready email.
+  - It still counts in Total This Month and in each person's owed amounts.
+- **Interaction with refunds:**
+  - Refunds can't be recorded on a different-card bill, because the money goes back to a personal card, not Citi.
+  - Credits can't be applied to one, because a Citi credit can't reduce a personal-card charge.
+  - The popup skips such bills.
+  - *Builder's call.*
+- **Data:** a nullable "paid with card of user" on the bill. Exact shape is the builder's call.
+
 ### Table and history
 
 - **Tags:**
@@ -121,4 +141,5 @@ Purple for credit, red for refunded, both as soft badges matching the existing s
 - A partial refund on a bill with an unequal custom split creates proportional credits that add up exactly.
 - A credit stays unused after "Not now" and shows in the Credits note until applied.
 - No emails are sent for refund actions. Other open tabs update live.
+- Marking a fully paid bill "Paid with different card → Tim" removes it from Ready for Card and from every card total, shows the "Tim's card" tag, and sends no Card Ready email. Clearing the option restores it.
 - Unit tests cover the credit split, the "can absorb" check, and the reduced amounts due. Service tests cover recording, applying, undo rules and authorization.
