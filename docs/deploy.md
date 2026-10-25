@@ -14,6 +14,7 @@ The app listens on host port **38417**. Session cookies are `Secure`, so put it 
 | `MYSQL_ROOT_PASSWORD` | `openssl rand -hex 24` | Used for the cutover import. |
 | `MAIL_URL` | `smtp://user:pass@smtp.example.com:587` | Use `smtps://...:465` for implicit TLS. URL-encode special characters in the user and password. |
 | `MAIL_FROM` | `Ledford Bills <bills@example.com>` | Must be a sender your SMTP provider allows. |
+| `LOGIN_CODE_REQUIRED` | `true` | Set to `false` to skip the emailed 6-digit sign-in code (password only). Defaults to on. |
 | `MAIL_TRANSPORT` | *(empty)* | Leave empty in production. `log` prints mail to the container log instead of sending. |
 
 `TZ` is fixed to `America/New_York` in the compose file. Scheduled jobs run on that clock: recurring bills at 00:05 daily, the unpaid-bills reminder at 08:00 on the 3rd and 6th.

@@ -16,8 +16,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'These credentials do not match our records.' })
   }
 
+  // LOGIN_CODE_REQUIRED=false turns off the emailed sign-in code (password only).
+  const codeRequired = process.env.LOGIN_CODE_REQUIRED !== 'false'
   const deviceToken = getCookie(event, TRUSTED_COOKIE)
-  if (deviceToken && await checkTrustedDevice(user.id, deviceToken)) {
+  if (!codeRequired || (deviceToken && await checkTrustedDevice(user.id, deviceToken))) {
     await startSession(event, user)
     return { status: 'ok' as const }
   }

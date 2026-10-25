@@ -14,6 +14,7 @@ services:
       MAIL_URL: ${MAIL_URL}
       MAIL_FROM: ${MAIL_FROM}
       MAIL_TRANSPORT: ${MAIL_TRANSPORT:-}
+      LOGIN_CODE_REQUIRED: ${LOGIN_CODE_REQUIRED:-true}
     depends_on:
       db:
         condition: service_healthy
