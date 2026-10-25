@@ -155,6 +155,13 @@ const payCard = (bill: Bill) =>
   act(`card:${bill.id}`, () => $fetch(`/api/bills/${bill.id}/card-paid`, { method: 'POST' }), 'Card marked paid')
 const paySelected = (target: 'me' | 'card') =>
   act(`bulk:${target}`, () => $fetch('/api/bills/pay-selected', { method: 'POST', body: { ids: selected.value, target } }), target === 'me' ? 'Selected bills marked paid' : 'Selected card payments marked paid')
+const readyIds = computed(() => bills.value.filter(canMarkCardPaid).map(b => b.id))
+const confirmPayAll = ref(false)
+watch(tab, () => (confirmPayAll.value = false))
+async function payAllReady() {
+  confirmPayAll.value = false
+  await act('bulk:ready', () => $fetch('/api/bills/pay-selected', { method: 'POST', body: { ids: readyIds.value, target: 'card' } }), 'Card marked paid for all ready bills')
+}
 const canPaySelectedMe = computed(() => myUnpaid(selectedBills.value) > 0)
 const canPaySelectedCard = computed(() => selectedBills.value.some(canMarkCardPaid))
 
@@ -269,6 +276,20 @@ function openEdit(bill: Bill) {
             @update:model-value="setTab"
           />
         </div>
+        <template v-if="tab === 'ready' && !hasSelection && readyIds.length">
+          <UButton v-if="!confirmPayAll" size="sm" class="rounded-full px-4 ms-auto" icon="i-lucide-credit-card" @click="confirmPayAll = true">
+            Pay card for all {{ readyIds.length }} · {{ formatMoney(readyForCardCents(bills)) }}
+          </UButton>
+          <template v-else>
+            <span class="text-sm text-toned ms-auto">Mark {{ readyIds.length }} card payments paid?</span>
+            <UButton size="sm" class="rounded-full px-4" :loading="busy === 'bulk:ready'" @click="payAllReady">
+              Confirm
+            </UButton>
+            <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="confirmPayAll = false">
+              Cancel
+            </UButton>
+          </template>
+        </template>
         <template v-if="hasSelection">
           <span class="text-sm text-muted ms-auto">{{ selected.length }} selected</span>
           <UButton v-if="canPaySelectedMe" size="sm" variant="outline" class="rounded-full" :loading="busy === 'bulk:me'" @click="paySelected('me')">
