@@ -21,6 +21,7 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui', 'nuxt-auth-utils'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
+  colorMode: { preference: 'light', fallback: 'light' },
 
   app: {
     head: { title: 'Ledford Bills' }

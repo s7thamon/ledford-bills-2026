@@ -4,3 +4,55 @@
 @theme static {
   --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
 }
+
+:root {
+  /* Inputs/buttons use radius-md (1.5x), so this lands them around 11px. */
+  --ui-radius: 0.45rem;
+  --app-card-shadow: 0 1px 2px rgb(15 26 30 / 0.04), 0 8px 24px -12px rgb(15 26 30 / 0.08);
+}
+
+.dark {
+  --app-card-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+body {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--ui-color-primary-100) 45%, transparent) 0, transparent 240px),
+    var(--ui-bg);
+}
+
+.dark body {
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--ui-color-primary-950) 35%, transparent) 0, transparent 240px),
+    var(--ui-bg);
+}
+
+@layer components {
+  .surface-card {
+    border-radius: 1rem;
+    background: var(--ui-bg);
+    box-shadow: var(--app-card-shadow), 0 0 0 1px var(--ui-border);
+  }
+
+  .dark .surface-card {
+    background: color-mix(in oklab, var(--ui-bg-muted) 60%, var(--ui-bg));
+    box-shadow: var(--app-card-shadow), 0 0 0 1px rgb(255 255 255 / 0.06);
+  }
+
+  .icon-tile {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    color: var(--ui-color-primary-600);
+    background: linear-gradient(135deg, var(--ui-color-primary-50), var(--ui-color-primary-200));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ui-color-primary-600) 12%, transparent);
+  }
+
+  .dark .icon-tile {
+    color: var(--ui-color-primary-300);
+    background: linear-gradient(135deg, color-mix(in oklab, var(--ui-color-primary-500) 22%, transparent), color-mix(in oklab, var(--ui-color-primary-500) 8%, transparent));
+  }
+}
