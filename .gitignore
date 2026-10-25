@@ -9,6 +9,7 @@ node_modules
 .cache
 dist
 logs
+ssh/
 *.log
 .DS_Store
 .idea

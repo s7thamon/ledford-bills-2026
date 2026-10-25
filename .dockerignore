@@ -13,3 +13,6 @@ ledford-bills-flux_old
 .superpowers
 test
 *.log
+ssh
+*.sql
+!server/db/migrations/*.sql
