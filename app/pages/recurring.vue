@@ -18,8 +18,8 @@ const form = reactive({ type: 'bill' as Item['type'], name: '', amount: '', day:
 const creating = ref(false)
 async function create() {
   const amountCents = parseAmount(form.amount)
-  if (!form.name.trim() || amountCents <= 0 || !form.day) {
-    toast.add({ title: 'Enter a name, an amount above zero, and a day.', color: 'warning' })
+  if (!form.name.trim() || amountCents <= 0 || !Number.isInteger(form.day) || form.day! < 1 || form.day! > 31) {
+    toast.add({ title: 'Enter a name, an amount above zero, and a day from 1 to 31.', color: 'warning' })
     return
   }
   creating.value = true
@@ -77,7 +77,7 @@ function openEdit(item: Item) {
 <template>
   <div class="space-y-8">
     <div class="flex flex-wrap items-start justify-between gap-4">
-      <div>
+      <div class="min-w-0 max-w-sm">
         <h1 class="text-2xl font-semibold text-highlighted">
           Recurring
         </h1>
@@ -86,12 +86,12 @@ function openEdit(item: Item) {
         </p>
       </div>
 
-      <form class="flex flex-wrap items-center gap-3" autocomplete="off" @submit.prevent="create">
-        <USelect v-model="form.type" :items="typeItems" class="w-40" aria-label="Type" />
+      <form class="ms-auto flex flex-wrap items-center justify-end gap-3" autocomplete="off" @submit.prevent="create">
+        <USelect v-model="form.type" :items="typeItems" icon="i-lucide-tag" class="w-36" aria-label="Type" />
         <UInput v-model="form.name" icon="i-lucide-receipt-text" placeholder="Name" aria-label="Name" class="w-48" />
-        <USelect v-if="form.type === 'reimbursement'" v-model="form.otherUserId" :items="userItems" placeholder="Who Owes" class="w-40" aria-label="Who owes" />
+        <USelect v-if="form.type === 'reimbursement'" v-model="form.otherUserId" :items="userItems" icon="i-lucide-user-round" placeholder="Who Owes" class="w-40" aria-label="Who owes" />
         <UInput v-model="form.amount" icon="i-lucide-dollar-sign" :placeholder="form.type === 'reimbursement' ? 'Owed' : 'Amount'" aria-label="Amount" inputmode="decimal" class="w-32" />
-        <UInputNumber v-model="form.day" :min="1" :max="31" placeholder="Day" aria-label="Day of month" class="w-28" />
+        <UInput v-model.number="form.day" icon="i-lucide-calendar-days" placeholder="Day" aria-label="Day of month" inputmode="numeric" maxlength="2" class="w-24" />
         <UButton type="submit" :loading="creating" icon="i-lucide-plus">
           New
         </UButton>
