@@ -3,6 +3,7 @@ import { formatMoney, moneyNumber, parseAmount } from '../shared/utils/money'
 import { equalShare, isCustomSplit, splitAmounts } from '../shared/utils/split'
 import { daysInMonth, monthRange, shiftMonth, todayIso } from '../shared/utils/dates'
 import { canDeleteBill, canEditBill, canMarkCardPaid, canMarkTransferComplete, canMarkReimbursementComplete, reimbursementStatus } from '../shared/utils/rules'
+import { billInTab, filterSuggestions, isBillTab, readyForCardCents, tabCounts } from '../shared/utils/bill-view'
 
 describe('money', () => {
   it('parses messy input to cents', () => {
@@ -73,5 +74,35 @@ describe('rules', () => {
     expect(reimbursementStatus(sent)).toBe('sent')
     expect(canMarkReimbursementComplete(sent, 2)).toBe(false)
     expect(canMarkReimbursementComplete(sent, 1)).toBe(true)
+  })
+})
+
+describe('bill view', () => {
+  const p = (userId: number, paid: boolean) => ({ userId, amountCents: 500, paidAt: paid ? '2026-10-01' : null })
+  const bills = [
+    { amountCents: 1000, cardPaidAt: null, participants: [p(1, false), p(2, true)] },
+    { amountCents: 2000, cardPaidAt: null, participants: [p(1, true), p(2, true)] },
+    { amountCents: 3000, cardPaidAt: '2026-10-02', participants: [p(1, true), p(2, true)] }
+  ]
+  it('counts tabs', () => {
+    expect(tabCounts(bills, 1)).toEqual({ all: 3, mine: 1, card: 2, ready: 1 })
+    expect(tabCounts(bills, 2)).toEqual({ all: 3, mine: 0, card: 2, ready: 1 })
+    expect(tabCounts([], 1)).toEqual({ all: 0, mine: 0, card: 0, ready: 0 })
+  })
+  it('filters by tab', () => {
+    expect(bills.filter(b => billInTab(b, 'ready', 1))).toEqual([bills[1]])
+    expect(isBillTab('ready')).toBe(true)
+    expect(isBillTab('nope')).toBe(false)
+  })
+  it('sums ready-for-card', () => {
+    expect(readyForCardCents(bills)).toBe(2000)
+  })
+  it('filters suggestions keeping order', () => {
+    const names = ['Rent', 'Food Lion', 'Current', 'Netflix']
+    expect(filterSuggestions(names, 'ren')).toEqual(['Rent', 'Current'])
+    expect(filterSuggestions(names, '  FOOD ')).toEqual(['Food Lion'])
+    expect(filterSuggestions(names, '')).toEqual(names)
+    expect(filterSuggestions(Array.from({ length: 15 }, (_, i) => `n${i}`), 'n')).toHaveLength(10)
+    expect(filterSuggestions(names, 'zzz')).toEqual([])
   })
 })
