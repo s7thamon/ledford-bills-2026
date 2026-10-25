@@ -82,7 +82,10 @@ function openEdit(item: Item) {
           Recurring
         </h1>
         <p class="text-sm text-muted">
-          Added automatically each month just after midnight. Active bills total {{ formatMoney(monthlyTotal) }} a month.
+          Added automatically each month just after midnight.
+        </p>
+        <p class="text-sm text-muted">
+          Active bills total {{ formatMoney(monthlyTotal) }} a month.
         </p>
       </div>
 
