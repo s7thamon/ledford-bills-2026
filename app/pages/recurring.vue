@@ -37,6 +37,13 @@ async function create() {
 const sameDay = (item: Item) => items.value.filter(i => i.dayOfMonth === item.dayOfMonth)
 const isFirst = (item: Item) => sameDay(item)[0]?.id === item.id
 const isLast = (item: Item) => sameDay(item).at(-1)?.id === item.id
+const isGrouped = (item: Item) => sameDay(item).length > 1
+// Same-day bills render as one tinted group: lighter dividers inside it, day number on the first row only.
+const rowClass = (item: Item) => [
+  item.active ? '' : 'opacity-50',
+  isGrouped(item) ? 'bg-primary/5' : '',
+  isGrouped(item) && !isLast(item) ? 'border-b-primary/10' : ''
+].join(' ')
 
 async function move(item: Item, direction: -1 | 1) {
   if (await run(() => $fetch(`/api/recurring/${item.id}/move`, { method: 'POST', body: { direction } }))) await refresh()
@@ -54,7 +61,7 @@ const columns: TableColumn<Item>[] = [
   { accessorKey: 'amountCents', header: 'Amount', meta: { class: { th: 'text-right', td: 'text-right' } } },
   { id: 'split', header: 'Split / Owed by' },
   { accessorKey: 'active', header: 'Active', meta: { class: { th: 'text-center', td: 'text-center' } } },
-  { id: 'order', header: 'Order', meta: { class: { th: 'text-center', td: 'text-center' } } },
+  { id: 'order', header: 'Same-day order', meta: { class: { th: 'text-center', td: 'text-center' } } },
   { id: 'actions', header: '', meta: { class: { td: 'w-px' } } }
 ]
 
@@ -92,12 +99,14 @@ function openEdit(item: Item) {
     </div>
 
     <div class="surface-card overflow-hidden">
-      <UTable :data="items" :columns="columns" :loading="status === 'pending'" sticky empty="No recurring bills yet." :meta="{ class: { tr: (row) => row.original.active ? '' : 'opacity-50' } }">
+      <UTable :data="items" :columns="columns" :loading="status === 'pending'" sticky empty="No recurring bills yet." :meta="{ class: { tr: (row) => rowClass(row.original) } }">
         <template #name-cell="{ row }">
           <span class="font-semibold text-highlighted">{{ row.original.name }}</span>
         </template>
         <template #dayOfMonth-cell="{ row }">
-          <span class="tabular-nums text-toned">{{ row.original.dayOfMonth }}</span>
+          <span v-if="isFirst(row.original)" class="tabular-nums text-toned">{{ row.original.dayOfMonth }}</span>
+          <!-- An empty slot falls back to the raw value, so keep the day for screen readers only. -->
+          <span v-else class="sr-only">{{ row.original.dayOfMonth }}</span>
         </template>
         <template #type-cell="{ row }">
           <UBadge :color="row.original.type === 'bill' ? 'primary' : 'warning'" variant="soft" class="rounded-full capitalize">
@@ -118,9 +127,9 @@ function openEdit(item: Item) {
           <USwitch :model-value="row.original.active" :aria-label="`Active: ${row.original.name}`" @update:model-value="v => setActive(row.original, v)" />
         </template>
         <template #order-cell="{ row }">
-          <div class="inline-flex">
-            <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="ghost" :disabled="isFirst(row.original)" aria-label="Move up" @click="move(row.original, -1)" />
-            <UButton icon="i-lucide-chevron-down" size="xs" color="neutral" variant="ghost" :disabled="isLast(row.original)" aria-label="Move down" @click="move(row.original, 1)" />
+          <div v-if="isGrouped(row.original)" class="inline-flex">
+            <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="ghost" :class="isFirst(row.original) && 'invisible'" :disabled="isFirst(row.original)" aria-label="Move up" @click="move(row.original, -1)" />
+            <UButton icon="i-lucide-chevron-down" size="xs" color="neutral" variant="ghost" :class="isLast(row.original) && 'invisible'" :disabled="isLast(row.original)" aria-label="Move down" @click="move(row.original, 1)" />
           </div>
         </template>
         <template #actions-cell="{ row }">

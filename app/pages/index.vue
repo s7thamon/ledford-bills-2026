@@ -59,7 +59,7 @@ const total = (list: Bill[]) => list.reduce((sum, b) => sum + b.amountCents, 0)
 const stats = computed(() => {
   const list = hasSelection.value ? selectedBills.value : bills.value
   return [
-    { title: hasSelection.value ? 'Selected total' : 'Total this month', icon: 'i-lucide-sigma', cents: total(list), copy: hasSelection.value },
+    { title: hasSelection.value ? 'Selected total' : 'Total this month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value },
     { title: hasSelection.value ? `Selected unpaid for ${myName.value}` : `${myName.value} still owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value },
     { title: 'Card unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, ready: readyForCardCents(list) }
   ]
@@ -181,7 +181,7 @@ function openEdit(bill: Bill) {
         <h1 class="text-[1.625rem] font-semibold text-highlighted min-w-52 text-center">
           {{ monthLabel(month) }}
         </h1>
-        <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" aria-label="Next month" :disabled="month >= currentMonth()" :to="{ query: { month: shiftMonth(month, 1) } }" />
+        <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" aria-label="Next month" :class="month >= currentMonth() && 'invisible'" :disabled="month >= currentMonth()" :to="{ query: { month: shiftMonth(month, 1) } }" />
       </div>
 
       <form class="flex flex-wrap items-center gap-3" autocomplete="off" @submit.prevent="createBill">
@@ -190,7 +190,6 @@ function openEdit(bill: Bill) {
           mode="autocomplete"
           :items="nameMatches"
           ignore-filter
-          open-on-focus
           :trailing-icon="undefined"
           :ui="{ trailing: 'hidden' }"
           icon="i-lucide-receipt-text"
@@ -251,10 +250,10 @@ function openEdit(bill: Bill) {
         </div>
         <template v-if="hasSelection">
           <span class="text-sm text-muted ms-auto">{{ selected.length }} selected</span>
-          <UButton size="sm" variant="outline" class="rounded-full" :disabled="!canPaySelectedMe" :loading="busy === 'bulk:me'" @click="paySelected('me')">
+          <UButton v-if="canPaySelectedMe" size="sm" variant="outline" class="rounded-full" :loading="busy === 'bulk:me'" @click="paySelected('me')">
             Pay selected ({{ myName }})
           </UButton>
-          <UButton size="sm" variant="outline" class="rounded-full" :disabled="!canPaySelectedCard" :loading="busy === 'bulk:card'" @click="paySelected('card')">
+          <UButton v-if="canPaySelectedCard" size="sm" variant="outline" class="rounded-full" :loading="busy === 'bulk:card'" @click="paySelected('card')">
             Pay selected card
           </UButton>
           <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="selected = []">

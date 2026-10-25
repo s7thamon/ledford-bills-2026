@@ -81,7 +81,7 @@ Old app behavior (`ledford-bills-flux_old/resources/views/pages/⚡bills.blade.p
 - Suggestions are bill names used more than once, ordered by use count, then by name. The server already returns this list from `/api/bills/suggestions`.
 - Filtering is a plain case-insensitive substring match that keeps that order.
 - Show the top 10.
-- The list opens on focus, and so on page load because the field is autofocused. The first match is highlighted when it opens.
+- The list opens only once the user types (the user asked for it not to show on page load). The first match is highlighted when it opens.
 - Arrow keys move the highlight.
 - While the list is open and anything matches, Enter picks the highlighted match, or the first match if none is highlighted. With no matches, Enter submits the form.
 - Escape closes the list, so a new name that contains an existing one ("Ren" vs "Rent") can then be submitted with Enter.
