@@ -8,8 +8,7 @@ const toast = useToast()
 const { user, session } = useUserSession()
 
 const month = computed(() => isMonth(route.query.month) ? route.query.month : currentMonth())
-const userUnpaid = computed(() => route.query.userUnpaid === '1')
-const cardUnpaid = computed(() => route.query.cardUnpaid === '1')
+const tab = computed<BillTab>(() => isBillTab(route.query.tab) ? route.query.tab : 'all')
 useHead({ title: () => monthLabel(month.value) })
 
 const me = computed(() => user.value!.id)
@@ -19,7 +18,7 @@ const adminMode = computed(() => !!session.value?.adminMode)
 const { data: users } = await useFetch('/api/users', { key: 'users', default: () => [] })
 const { data: bills, refresh, status } = await useFetch('/api/bills', {
   key: 'bills',
-  query: computed(() => ({ month: month.value, userUnpaid: userUnpaid.value || undefined, cardUnpaid: cardUnpaid.value || undefined })),
+  query: computed(() => ({ month: month.value })),
   default: () => []
 })
 const { data: suggestions, refresh: refreshSuggestions } = await useFetch('/api/bills/suggestions', { key: 'bill-suggestions', default: () => [] })
@@ -28,17 +27,23 @@ type Bill = (typeof bills.value)[number]
 
 // Selection
 const selected = ref<number[]>([])
-watch([month, userUnpaid, cardUnpaid], () => (selected.value = []))
-watch(bills, list => (selected.value = selected.value.filter(id => list.some(b => b.id === id))))
+watch(month, () => (selected.value = []))
 const hasSelection = computed(() => selected.value.length > 0)
 const selectedBills = computed(() => bills.value.filter(b => selected.value.includes(b.id)))
 function toggleSelected(id: number) {
   selected.value = selected.value.includes(id) ? selected.value.filter(x => x !== id) : [...selected.value, id]
 }
 
-function toggleFilter(key: 'userUnpaid' | 'cardUnpaid') {
-  router.replace({ query: { ...route.query, [key]: route.query[key] === '1' ? undefined : '1' } })
+function setTab(t: string | number) {
+  router.replace({ query: { ...route.query, tab: t === 'all' ? undefined : String(t) } })
 }
+const counts = computed(() => tabCounts(bills.value, me.value))
+const tabItems = computed(() => [
+  { label: 'All', value: 'all', badge: counts.value.all },
+  { label: `${myName.value} unpaid`, value: 'mine', badge: counts.value.mine },
+  { label: 'Card unpaid', value: 'card', badge: counts.value.card },
+  { label: 'Ready for card', value: 'ready', badge: counts.value.ready }
+].map(item => ({ ...item, badge: { label: String(item.badge), size: 'sm' as const, color: (tab.value === item.value ? 'primary' : 'neutral') as 'primary' | 'neutral', variant: 'soft' as const } })))
 
 // Amounts
 const share = (bill: Bill) => isCustomSplit(bill.participants.map(p => p.amountCents))
@@ -54,9 +59,9 @@ const total = (list: Bill[]) => list.reduce((sum, b) => sum + b.amountCents, 0)
 const stats = computed(() => {
   const list = hasSelection.value ? selectedBills.value : bills.value
   return [
-    { title: hasSelection.value ? 'Selected Total' : 'Total Amount', cents: total(list), copy: hasSelection.value },
-    { title: hasSelection.value ? `Selected Unpaid for ${myName.value}` : `${myName.value} Unpaid Amount`, cents: myUnpaid(list), copy: hasSelection.value },
-    { title: 'Unpaid Card Amount', cents: cardUnpaidTotal(list), copy: false }
+    { title: hasSelection.value ? 'Selected total' : 'Total this month', icon: 'i-lucide-sigma', cents: total(list), copy: hasSelection.value },
+    { title: hasSelection.value ? `Selected unpaid for ${myName.value}` : `${myName.value} still owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value },
+    { title: 'Card unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, ready: readyForCardCents(list) }
   ]
 })
 
@@ -77,24 +82,27 @@ function sort(key: SortKey) {
   }
 }
 const sortValue = (b: Bill) => sortBy.value === 'share' ? share(b) : sortBy.value === 'amountCents' ? b.amountCents : b.addedOn + String(b.id).padStart(10, '0')
-const rows = computed(() => [...bills.value].sort((a, b) => {
+const rows = computed(() => bills.value.filter(b => billInTab(b, tab.value, me.value)).sort((a, b) => {
   const [x, y] = [sortValue(a), sortValue(b)]
   return (x < y ? -1 : x > y ? 1 : 0) * (sortDir.value === 'asc' ? 1 : -1)
 }))
+// Prune to visible rows so bulk actions never touch bills hidden by the active tab.
+watch(() => rows.value, list => (selected.value = selected.value.filter(id => list.some(b => b.id === id))))
 const sortIcon = (key: SortKey) => sortBy.value !== key ? 'i-lucide-arrow-up-down' : sortDir.value === 'asc' ? 'i-lucide-arrow-up-narrow-wide' : 'i-lucide-arrow-down-wide-narrow'
 
 const columns = computed<TableColumn<Bill>[]>(() => [
   { accessorKey: 'addedOn', header: 'Added' },
   { accessorKey: 'name', header: 'Name', meta: { class: { td: 'min-w-64' } } },
   { accessorKey: 'amountCents', header: 'Amount', meta: { class: { th: 'text-right', td: 'text-right' } } },
-  { id: 'share', header: 'Each/Split', meta: { class: { th: 'text-right', td: 'text-right' } } },
-  ...users.value.map(u => ({ id: `paid_${u.id}`, header: `${u.name.split(' ')[0]} Paid`, meta: { class: { th: 'text-center', td: 'text-center' } } })),
-  { id: 'card', header: 'Card Paid', meta: { class: { th: 'text-center', td: 'text-center' } } },
+  { id: 'share', header: 'Each', meta: { class: { th: 'text-right', td: 'text-right' } } },
+  ...users.value.map(u => ({ id: `paid_${u.id}`, header: u.name.split(' ')[0], meta: { class: { th: 'text-center', td: 'text-center' } } })),
+  { id: 'card', header: 'Card', meta: { class: { th: 'text-center', td: 'text-center' } } },
   { id: 'actions', header: '', meta: { class: { td: 'w-px' } } }
 ])
 
 // Create
 const form = reactive({ name: '', amount: '' })
+const nameMatches = computed(() => filterSuggestions(suggestions.value, form.name))
 const creating = ref(false)
 async function createBill() {
   const amountCents = parseAmount(form.amount)
@@ -166,11 +174,11 @@ function openEdit(bill: Bill) {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
+  <div class="space-y-8">
+    <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-1">
         <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" aria-label="Previous month" :to="{ query: { month: shiftMonth(month, -1) } }" />
-        <h1 class="text-2xl font-semibold text-highlighted min-w-48 text-center">
+        <h1 class="text-[1.625rem] font-semibold text-highlighted min-w-52 text-center">
           {{ monthLabel(month) }}
         </h1>
         <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" aria-label="Next month" :disabled="month >= currentMonth()" :to="{ query: { month: shiftMonth(month, 1) } }" />
@@ -180,7 +188,11 @@ function openEdit(bill: Bill) {
         <UInputMenu
           v-model="form.name"
           mode="autocomplete"
-          :items="suggestions"
+          :items="nameMatches"
+          ignore-filter
+          open-on-focus
+          :trailing-icon="undefined"
+          :ui="{ trailing: 'hidden' }"
           icon="i-lucide-receipt-text"
           placeholder="Bill Name"
           aria-label="Bill name"
@@ -194,55 +206,66 @@ function openEdit(bill: Bill) {
       </form>
     </div>
 
-    <div class="grid gap-4 sm:grid-cols-3">
+    <div class="grid gap-5 sm:grid-cols-3">
       <component
         :is="stat.copy ? 'button' : 'div'"
         v-for="stat in stats"
         :key="stat.title"
         type="button"
-        class="rounded-lg bg-elevated/60 px-6 py-5 text-left"
-        :class="stat.copy && 'cursor-pointer ring-1 ring-primary/30 hover:bg-primary/10 transition'"
+        class="surface-card flex items-center gap-4 px-6 py-5 text-left"
+        :class="stat.copy && 'cursor-pointer ring-2 ring-primary/30 hover:bg-primary/5 transition'"
         :title="stat.copy ? 'Copy amount' : undefined"
         @click="stat.copy && copy(stat.cents)"
       >
-        <div class="text-sm text-muted flex items-center gap-1">
-          {{ stat.title }}
-          <UIcon v-if="stat.copy" name="i-lucide-copy" class="size-3.5" />
+        <div class="icon-tile">
+          <UIcon :name="stat.icon" class="size-5" />
         </div>
-        <div class="mt-1 text-2xl font-semibold text-highlighted tabular-nums">
-          {{ formatMoney(stat.cents) }}
+        <div class="min-w-0">
+          <div class="text-sm font-medium text-toned flex items-center gap-1">
+            {{ stat.title }}
+            <UIcon v-if="stat.copy" name="i-lucide-copy" class="size-3.5" />
+          </div>
+          <div class="text-[1.625rem] leading-tight font-bold text-highlighted tabular-nums">
+            {{ formatMoney(stat.cents) }}
+          </div>
+          <div v-if="stat.ready" class="text-xs font-medium text-primary mt-0.5">
+            {{ formatMoney(stat.ready) }} ready to pay
+          </div>
         </div>
       </component>
     </div>
 
-    <div class="flex flex-wrap items-center justify-end gap-2">
-      <template v-if="hasSelection">
-        <span class="text-sm text-muted me-auto">{{ selected.length }} selected</span>
-        <UButton size="sm" variant="outline" :disabled="!canPaySelectedMe" :loading="busy === 'bulk:me'" @click="paySelected('me')">
-          Pay selected ({{ myName }})
-        </UButton>
-        <UButton size="sm" variant="outline" :disabled="!canPaySelectedCard" :loading="busy === 'bulk:card'" @click="paySelected('card')">
-          Pay selected card
-        </UButton>
-        <UButton size="sm" color="neutral" variant="ghost" @click="selected = []">
-          Clear
-        </UButton>
-      </template>
-      <span class="text-sm text-muted ms-2">Filter by:</span>
-      <UBadge as="button" :variant="userUnpaid ? 'solid' : 'soft'" :color="userUnpaid ? 'primary' : 'neutral'" class="cursor-pointer rounded-full" @click="toggleFilter('userUnpaid')">
-        {{ myName }} Unpaid
-      </UBadge>
-      <UBadge as="button" :variant="cardUnpaid ? 'solid' : 'soft'" :color="cardUnpaid ? 'primary' : 'neutral'" class="cursor-pointer rounded-full" @click="toggleFilter('cardUnpaid')">
-        Card Unpaid
-      </UBadge>
-    </div>
+    <div class="surface-card overflow-hidden">
+      <div class="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-default">
+        <UTabs
+          :model-value="tab"
+          :items="tabItems"
+          :content="false"
+          variant="pill"
+          color="neutral"
+          :ui="{ list: 'bg-transparent p-0 gap-1', trigger: 'rounded-full px-3.5 py-1.5 font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none', indicator: 'hidden' }"
+          @update:model-value="setTab"
+        />
+        <template v-if="hasSelection">
+          <span class="text-sm text-muted ms-auto">{{ selected.length }} selected</span>
+          <UButton size="sm" variant="outline" class="rounded-full" :disabled="!canPaySelectedMe" :loading="busy === 'bulk:me'" @click="paySelected('me')">
+            Pay selected ({{ myName }})
+          </UButton>
+          <UButton size="sm" variant="outline" class="rounded-full" :disabled="!canPaySelectedCard" :loading="busy === 'bulk:card'" @click="paySelected('card')">
+            Pay selected card
+          </UButton>
+          <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="selected = []">
+            Clear
+          </UButton>
+        </template>
+      </div>
 
     <UTable
       :data="rows"
       :columns="columns"
       :loading="status === 'pending'"
       sticky
-      empty="No bills for this month yet."
+      :empty="tab === 'all' ? 'No bills for this month yet.' : 'Nothing here.'"
       :meta="{ class: { tr: (row) => `cursor-pointer ${selected.includes(row.original.id) ? 'bg-primary/10' : ''}` } }"
       @select="(_e, row) => toggleSelected(row.original.id)"
     >
@@ -253,11 +276,11 @@ function openEdit(bill: Bill) {
         <UButton color="neutral" variant="link" class="-mx-2.5 font-semibold" :trailing-icon="sortIcon('amountCents')" label="Amount" @click="sort('amountCents')" />
       </template>
       <template #share-header>
-        <UButton color="neutral" variant="link" class="-mx-2.5 font-semibold" :trailing-icon="sortIcon('share')" label="Each/Split" @click="sort('share')" />
+        <UButton color="neutral" variant="link" class="-mx-2.5 font-semibold" :trailing-icon="sortIcon('share')" label="Each" @click="sort('share')" />
       </template>
 
       <template #addedOn-cell="{ row }">
-        <span class="tabular-nums tracking-wide text-muted">{{ dotDate(row.original.addedOn) }}</span>
+        <span class="tabular-nums text-toned">{{ dotDate(row.original.addedOn) }}</span>
       </template>
 
       <template #name-cell="{ row }">
@@ -274,6 +297,7 @@ function openEdit(bill: Bill) {
         />
         <span
           v-else
+           class="font-semibold text-highlighted"
           :class="canEditBill(row.original) && 'hover:underline decoration-dotted cursor-text'"
           :title="canEditBill(row.original) ? 'Click to rename' : undefined"
           @click="canEditBill(row.original) && ($event.stopPropagation(), startInline(row.original, 'name'))"
@@ -313,40 +337,43 @@ function openEdit(bill: Bill) {
 
       <template v-for="u in users" :key="u.id" #[`paid_${u.id}-cell`]="{ row }">
         <template v-for="p in [row.original.participants.find(x => x.userId === u.id)]" :key="u.id">
-          <UBadge v-if="p?.paidAt" color="primary" variant="soft" class="rounded-full">
+          <UBadge v-if="p?.paidAt" color="success" variant="soft" size="md" icon="i-lucide-check">
             Paid
           </UBadge>
           <UButton
             v-else-if="p && (u.id === me || adminMode)"
             size="sm"
-            :variant="u.id === me ? 'outline' : 'soft'"
+            class="rounded-full px-4"
+            :variant="u.id === me ? 'solid' : 'soft'"
             :color="u.id === me ? 'primary' : 'warning'"
             :loading="busy === `pay:${row.original.id}:${u.id}`"
             @click.stop="payFor(row.original, u.id)"
           >
             {{ u.id === me ? 'Pay' : 'Mark Paid' }}
           </UButton>
-          <UBadge v-else-if="p" color="neutral" variant="soft" class="rounded-full">
-            Unpaid
+          <UBadge v-else-if="p" color="warning" variant="soft" size="md">
+            Waiting
           </UBadge>
           <span v-else class="text-dimmed">-</span>
         </template>
       </template>
 
       <template #card-cell="{ row }">
-        <UBadge v-if="row.original.cardPaidAt" color="primary" variant="soft" class="rounded-full">
+        <UBadge v-if="row.original.cardPaidAt" color="success" variant="soft" size="md" icon="i-lucide-check">
           Paid
         </UBadge>
-        <UButton v-else-if="canMarkCardPaid(row.original)" size="sm" variant="ghost" :loading="busy === `card:${row.original.id}`" @click.stop="payCard(row.original)">
-          Mark Paid
+        <UButton v-else-if="canMarkCardPaid(row.original)" size="sm" variant="outline" class="rounded-full px-4" :loading="busy === `card:${row.original.id}`" @click.stop="payCard(row.original)">
+          Pay card
         </UButton>
-        <span v-else class="text-sm text-muted">Not Fully Paid</span>
+        <span v-else class="text-dimmed">—</span>
       </template>
 
       <template #actions-cell="{ row }">
         <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit bill" @click.stop="openEdit(row.original)" />
       </template>
     </UTable>
+
+    </div>
 
     <BillEditModal v-model:open="editOpen" :bill="editingBill" :users="users" @changed="refresh" />
   </div>
