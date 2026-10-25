@@ -4,6 +4,50 @@ import { equalShare, isCustomSplit, splitAmounts } from '../shared/utils/split'
 import { daysInMonth, monthRange, ordinalDay, shiftMonth, todayIso, usDotDate } from '../shared/utils/dates'
 import { canDeleteBill, canEditBill, canMarkCardPaid, canMarkTransferComplete, canMarkReimbursementComplete, reimbursementStatus } from '../shared/utils/rules'
 import { billInTab, filterSuggestions, isBillTab, readyForCardCents, tabCounts } from '../shared/utils/bill-view'
+import { canAbsorb, cardDue, shareDue, splitRefund } from '../shared/utils/credits'
+import { cardUnpaidCents } from '../shared/utils/bill-view'
+
+describe('different card and credits in rules', () => {
+  const p = (userId: number, paid: boolean) => ({ userId, amountCents: 500, paidAt: paid ? '2026-10-01' : null })
+  const personal = { amountCents: 1000, cardPaidAt: null, paidWithCardOf: 1, participants: [p(1, true), p(2, true)] }
+  const credited = { amountCents: 32000, cardPaidAt: null, credit: { amountCents: 30000, shares: { 1: 15000, 2: 15000 } }, participants: [p(1, true), p(2, true)] }
+  it('never offers the card for a different-card bill', () => {
+    expect(canMarkCardPaid(personal)).toBe(false)
+    expect(billInTab(personal, 'ready', 1)).toBe(false)
+    expect(billInTab(personal, 'card', 1)).toBe(false)
+    expect(cardUnpaidCents([personal])).toBe(0)
+  })
+  it('uses the reduced card amount for credited bills', () => {
+    expect(readyForCardCents([credited])).toBe(2000)
+    expect(cardUnpaidCents([credited])).toBe(2000)
+  })
+})
+
+describe('credits', () => {
+  const even = [{ userId: 1, amountCents: 15000 }, { userId: 2, amountCents: 15000 }]
+  it('splits a refund in proportion to stored shares, exactly', () => {
+    expect(splitRefund(30000, even)).toEqual({ 1: 15000, 2: 15000 })
+    expect(splitRefund(301, even)).toEqual({ 1: 151, 2: 150 })
+    expect(splitRefund(1000, [{ userId: 1, amountCents: 2668 }, { userId: 2, amountCents: 0 }])).toEqual({ 1: 1000, 2: 0 })
+    expect(splitRefund(1000, [{ userId: 1, amountCents: 7500 }, { userId: 2, amountCents: 2500 }])).toEqual({ 1: 750, 2: 250 })
+    expect(splitRefund(101, [{ userId: 1, amountCents: 0 }, { userId: 2, amountCents: 0 }])).toEqual({ 1: 51, 2: 50 })
+    const odd = splitRefund(1001, [{ userId: 1, amountCents: 3334 }, { userId: 2, amountCents: 6667 }])
+    expect(odd[1]! + odd[2]!).toBe(1001)
+  })
+  it('checks a bill can absorb a credit', () => {
+    const credit = { amountCents: 30000, shares: { 1: 15000, 2: 15000 } }
+    expect(canAbsorb({ amountCents: 32000, participants: [{ userId: 1, amountCents: 16000 }, { userId: 2, amountCents: 16000 }] }, credit)).toBe(true)
+    expect(canAbsorb({ amountCents: 32000, participants: [{ userId: 1, amountCents: 32000 }, { userId: 2, amountCents: 0 }] }, credit)).toBe(false)
+    expect(canAbsorb({ amountCents: 29999, participants: [{ userId: 1, amountCents: 15000 }, { userId: 2, amountCents: 15000 }] }, credit)).toBe(false)
+  })
+  it('computes amounts due after a credit', () => {
+    const credit = { amountCents: 30000, shares: { 1: 15000, 2: 15000 } }
+    expect(shareDue({ userId: 1, amountCents: 16000 }, credit)).toBe(1000)
+    expect(shareDue({ userId: 1, amountCents: 16000 }, null)).toBe(16000)
+    expect(cardDue({ amountCents: 32000, credit })).toBe(2000)
+    expect(cardDue({ amountCents: 32000 })).toBe(32000)
+  })
+})
 
 describe('money', () => {
   it('parses messy input to cents', () => {
