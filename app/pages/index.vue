@@ -237,16 +237,18 @@ function openEdit(bill: Bill) {
 
     <div class="surface-card overflow-hidden">
       <div class="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-default">
-        <UTabs
-          :model-value="tab"
-          :items="tabItems"
-          :content="false"
-          class="w-fit"
-          variant="pill"
-          color="neutral"
-          :ui="{ list: 'bg-transparent p-0 gap-1', trigger: 'rounded-full px-3.5 py-1.5 font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none', indicator: 'hidden' }"
-          @update:model-value="setTab"
-        />
+        <div class="max-w-full overflow-x-auto">
+          <UTabs
+            :model-value="tab"
+            :items="tabItems"
+            :content="false"
+            class="w-fit"
+            variant="pill"
+            color="neutral"
+            :ui="{ list: 'bg-transparent p-0 gap-1', trigger: 'rounded-full px-3.5 py-1.5 font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none before:hidden', indicator: 'hidden' }"
+            @update:model-value="setTab"
+          />
+        </div>
         <template v-if="hasSelection">
           <span class="text-sm text-muted ms-auto">{{ selected.length }} selected</span>
           <UButton size="sm" variant="outline" class="rounded-full" :disabled="!canPaySelectedMe" :loading="busy === 'bulk:me'" @click="paySelected('me')">

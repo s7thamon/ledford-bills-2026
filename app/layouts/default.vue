@@ -84,9 +84,15 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
             </template>
           </UInput>
         </form>
-        <UDropdownMenu :items="themeMenu" :content="{ align: 'end' }">
-          <UButton :icon="themeIcon" color="neutral" variant="ghost" class="rounded-full" aria-label="Theme" />
-        </UDropdownMenu>
+        <!-- The saved preference lives in localStorage, so the server can't render the right icon. -->
+        <ClientOnly>
+          <UDropdownMenu :items="themeMenu" :content="{ align: 'end' }">
+            <UButton :icon="themeIcon" color="neutral" variant="ghost" class="rounded-full" aria-label="Theme" />
+          </UDropdownMenu>
+          <template #fallback>
+            <div class="size-9" />
+          </template>
+        </ClientOnly>
         <UTooltip :text="adminMode ? 'Admin mode on: you can mark anyone paid' : 'Admin mode'">
           <UButton
             :icon="adminMode ? 'i-lucide-lock-open' : 'i-lucide-lock'"
