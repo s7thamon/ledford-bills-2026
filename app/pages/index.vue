@@ -80,9 +80,9 @@ const vsLastMonth = computed(() => {
 const stats = computed(() => {
   const list = hasSelection.value ? selectedBills.value : bills.value
   return [
-    { title: hasSelection.value ? 'Selected Total' : 'Total This Month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value, note: hasSelection.value ? '' : vsLastMonth.value },
-    { title: hasSelection.value ? `Selected Unpaid for ${myName.value}` : `${myName.value} Still Owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value, note: hasSelection.value ? '' : users.value.filter(u => u.id !== me.value).map(u => `${u.name.split(' ')[0]} owes ${formatMoney(unpaidFor(list, u.id))}`).join(' · ') },
-    { title: 'Card Unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, note: readyForCardCents(list) ? `${formatMoney(readyForCardCents(list))} ready to pay` : '' }
+    { title: hasSelection.value ? 'Selected Total' : 'Total This Month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value, tab: 'all' as BillTab, note: hasSelection.value ? '' : vsLastMonth.value },
+    { title: hasSelection.value ? `Selected Unpaid for ${myName.value}` : `${myName.value} Still Owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value, tab: 'mine' as BillTab, note: hasSelection.value ? '' : users.value.filter(u => u.id !== me.value).map(u => `${u.name.split(' ')[0]} owes ${formatMoney(unpaidFor(list, u.id))}`).join(' · ') },
+    { title: 'Card Unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, tab: 'ready' as BillTab, note: readyForCardCents(list) ? `${formatMoney(readyForCardCents(list))} ready to pay` : '' }
   ]
 })
 
@@ -234,15 +234,14 @@ function openEdit(bill: Bill) {
     </div>
 
     <div class="grid gap-5 sm:grid-cols-3">
-      <component
-        :is="stat.copy ? 'button' : 'div'"
+      <button
         v-for="stat in stats"
         :key="stat.title"
         type="button"
-        class="surface-card flex items-center gap-4 px-6 py-5 text-left"
-        :class="stat.copy && 'cursor-pointer ring-2 ring-primary/30 hover:bg-primary/5 transition'"
+        class="surface-card flex items-center gap-4 px-6 py-5 text-left cursor-pointer transition hover:ring-2 hover:ring-primary/30"
+        :class="stat.copy && 'ring-2 ring-primary/30 hover:bg-primary/5'"
         :title="stat.copy ? 'Copy amount' : undefined"
-        @click="stat.copy && copy(stat.cents)"
+        @click="stat.copy ? copy(stat.cents) : setTab(stat.tab)"
       >
         <div class="icon-tile">
           <UIcon :name="stat.icon" class="size-5" />
@@ -259,7 +258,7 @@ function openEdit(bill: Bill) {
             {{ stat.note }}
           </div>
         </div>
-      </component>
+      </button>
     </div>
 
     <div class="surface-card overflow-hidden">
