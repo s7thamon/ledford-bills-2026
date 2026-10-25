@@ -205,7 +205,9 @@ function openEdit(item: Item) {
             >
               Confirm Received
             </UButton>
-            <UButton v-if="canEditReimbursement(row.original, me)" icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit" @click="openEdit(row.original)" />
+            <UTooltip v-if="canEditReimbursement(row.original, me)" text="Edit Reimbursement" :delay-duration="0" :content="{ side: 'top' }">
+              <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit" @click="openEdit(row.original)" />
+            </UTooltip>
           </div>
         </template>
       </UTable>

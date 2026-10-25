@@ -27,6 +27,19 @@ body {
     var(--ui-bg);
 }
 
+@layer base {
+  /* Tailwind's reset gives buttons the default arrow; anything clickable should show the hand. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab'],
+  [role='menuitem'],
+  [role='option'],
+  summary,
+  label[for] {
+    cursor: pointer;
+  }
+}
+
 @layer components {
   .surface-card {
     border-radius: 1rem;

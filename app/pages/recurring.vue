@@ -133,7 +133,9 @@ function openEdit(item: Item) {
           </div>
         </template>
         <template #actions-cell="{ row }">
-          <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit" @click="openEdit(row.original)" />
+          <UTooltip text="Edit Recurring" :delay-duration="0" :content="{ side: 'top' }">
+            <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit" @click="openEdit(row.original)" />
+          </UTooltip>
         </template>
       </UTable>
     </div>

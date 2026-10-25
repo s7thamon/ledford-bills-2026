@@ -116,8 +116,8 @@ const sortIcon = (key: SortKey) => sortBy.value !== key ? 'i-lucide-arrow-up-dow
 
 const UTooltip = resolveComponent('UTooltip')
 const banks = [
-  { label: 'RTP Federal Credit Union (joint account)', url: 'https://www.rtpfcu.org', icon: '/banks/rtpfcu.ico' },
-  { label: 'Citi (credit card)', url: 'https://www.citi.com', icon: '/banks/citi.png' }
+  { label: 'RTP Federal Credit Union', url: 'https://www.rtpfcu.org', icon: '/banks/rtpfcu.ico' },
+  { label: 'Citi', url: 'https://www.citi.com', icon: '/banks/citi.png' }
 ]
 
 // Totals for whatever the active tab shows, e.g. exactly what Ready for Card will put on the card.
@@ -129,7 +129,7 @@ const columns = computed<TableColumn<Bill>[]>(() => [
   { accessorKey: 'amountCents', header: 'Amount', footer: () => footerMoney(total(rows.value)), meta: { class: { th: 'text-right', td: 'text-right' } } },
   { id: 'share', header: 'Each', footer: () => footerMoney(rows.value.reduce((sum, b) => sum + share(b), 0)), meta: { class: { th: 'text-right', td: 'text-right' } } },
   ...users.value.map(u => ({ id: `paid_${u.id}`, header: u.name.split(' ')[0], meta: { class: { th: 'text-center', td: 'text-center' } } })),
-  { id: 'card', header: 'Card', footer: () => h('div', { class: 'flex justify-center gap-1' }, banks.map(bank => h(UTooltip, { text: bank.label, delayDuration: 0 }, () => h('a', { href: bank.url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': bank.label, class: 'inline-flex size-8 items-center justify-center rounded-full hover:bg-elevated transition' }, [h('img', { src: bank.icon, alt: '', class: 'size-5 rounded-sm' })])))), meta: { class: { th: 'text-center', td: 'text-center' } } },
+  { id: 'card', header: 'Card', footer: () => h('div', { class: 'flex justify-center gap-1' }, banks.map(bank => h(UTooltip, { text: bank.label, delayDuration: 0, content: { side: 'top' } }, () => h('a', { href: bank.url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': bank.label, class: 'inline-flex size-8 items-center justify-center rounded-full hover:bg-elevated transition' }, [h('img', { src: bank.icon, alt: '', class: 'size-5 rounded-sm' })])))), meta: { class: { th: 'text-center', td: 'text-center' } } },
   { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { td: 'w-px' } } }
 ])
 
@@ -322,7 +322,7 @@ function openEdit(bill: Bill) {
       :loading="status === 'pending'"
       sticky
       :empty="tab === 'all' ? 'No bills for this month yet.' : 'Nothing here.'"
-      :meta="{ class: { tr: (row) => `cursor-pointer ${selected.includes(row.original.id) ? 'bg-primary/10!' : ''}` } }"
+      :meta="{ class: { tr: (row) => selected.includes(row.original.id) ? 'bg-primary/10!' : '' } }"
       @select="(_e, row) => toggleSelected(row.original.id)"
     >
       <template #addedOn-header>
@@ -336,7 +336,7 @@ function openEdit(bill: Bill) {
       </template>
 
       <template #addedOn-cell="{ row }">
-        <UTooltip :text="usDotDate(row.original.addedOn)" :delay-duration="0">
+        <UTooltip :text="usDotDate(row.original.addedOn)" :delay-duration="0" :content="{ side: 'top' }">
           <span class="tabular-nums text-toned">{{ ordinalDay(row.original.addedOn) }}</span>
         </UTooltip>
       </template>
@@ -427,7 +427,9 @@ function openEdit(bill: Bill) {
       </template>
 
       <template #actions-cell="{ row }">
-        <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit bill" @click.stop="openEdit(row.original)" />
+        <UTooltip text="Edit Bill" :delay-duration="0" :content="{ side: 'top' }">
+          <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit bill" @click.stop="openEdit(row.original)" />
+        </UTooltip>
       </template>
     </UTable>
 
