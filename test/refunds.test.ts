@@ -95,6 +95,15 @@ describe('refunds', () => {
     expect((await listRefunds())[0]!.appliedToBillId).toBeNull()
   })
 
+  it('renaming with the same amounts keeps the credit', async () => {
+    const rug = await paidBill('Costco Rug', 30000)
+    const refund = await recordRefund(rug.id, { amountCents: 30000, refundedOn: '2026-11-02' }, tim)
+    const replacement = await createBill({ name: 'Rug 2', amountCents: 32000, createdBy: tim })
+    await applyRefund(refund.id, replacement.id)
+    const renamed = await updateBill(replacement.id, { name: 'Rug (replacement)', amountCents: 32000, splits: { [tim]: 16000, [kelly]: 16000 } })
+    expect(renamed.credit?.refundId).toBe(refund.id)
+  })
+
   it('delete returns credit', async () => {
     const rug = await paidBill('Costco Rug', 30000)
     const refund = await recordRefund(rug.id, { amountCents: 30000, refundedOn: '2026-11-02' }, tim)

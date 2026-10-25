@@ -200,7 +200,8 @@ export async function updateBill(id: number, input: { name?: string, amountCents
     amounts = splitAmounts(total, ids)
   }
 
-  const amountsChange = !!amounts || (input.amountCents !== undefined && input.amountCents !== bill.amountCents)
+  const amountsChange = total !== bill.amountCents
+    || (!!amounts && bill.participants.some(p => amounts[p.userId] !== p.amountCents))
   await db.transaction(async (tx) => {
     // A credit was sized for the old amounts; send it back to unused rather than leave it stale.
     if (bill.credit && amountsChange) {
