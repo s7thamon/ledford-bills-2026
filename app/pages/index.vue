@@ -97,7 +97,7 @@ const columns = computed<TableColumn<Bill>[]>(() => [
   { id: 'share', header: 'Each', meta: { class: { th: 'text-right', td: 'text-right' } } },
   ...users.value.map(u => ({ id: `paid_${u.id}`, header: u.name.split(' ')[0], meta: { class: { th: 'text-center', td: 'text-center' } } })),
   { id: 'card', header: 'Card', meta: { class: { th: 'text-center', td: 'text-center' } } },
-  { id: 'actions', header: '', meta: { class: { td: 'w-px' } } }
+  { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { td: 'w-px' } } }
 ])
 
 // Create

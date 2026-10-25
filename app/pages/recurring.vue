@@ -62,7 +62,7 @@ const columns: TableColumn<Item>[] = [
   { id: 'split', header: 'Split / Owed by' },
   { accessorKey: 'active', header: 'Active', meta: { class: { th: 'text-center', td: 'text-center' } } },
   { id: 'order', header: 'Same-day order', meta: { class: { th: 'text-center', td: 'text-center' } } },
-  { id: 'actions', header: '', meta: { class: { td: 'w-px' } } }
+  { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { td: 'w-px' } } }
 ]
 
 const editOpen = ref(false)

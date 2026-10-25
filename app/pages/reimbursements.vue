@@ -101,7 +101,7 @@ const columns: TableColumn<Item>[] = [
   { accessorKey: 'owedCents', header: 'Owed', meta: { class: { th: 'text-right', td: 'text-right' } } },
   { id: 'flow', header: 'Who' },
   { id: 'status', header: 'Status' },
-  { id: 'actions', header: '', meta: { class: { th: 'text-right', td: 'text-right' } } }
+  { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { th: 'text-right', td: 'text-right' } } }
 ]
 
 const editOpen = ref(false)
