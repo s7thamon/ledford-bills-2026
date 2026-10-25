@@ -54,10 +54,11 @@ const tabItems = computed(() => [
 const share = (bill: Bill) => isCustomSplit(bill.participants.map(p => p.amountCents))
   ? bill.participants.find(p => p.userId === me.value)?.amountCents ?? 0
   : equalShare(bill.amountCents, users.value.length)
-const myUnpaid = (list: Bill[]) => list.reduce((sum, b) => {
-  const p = b.participants.find(p => p.userId === me.value)
+const unpaidFor = (list: Bill[], userId: number) => list.reduce((sum, b) => {
+  const p = b.participants.find(p => p.userId === userId)
   return sum + (p && !p.paidAt ? p.amountCents : 0)
 }, 0)
+const myUnpaid = (list: Bill[]) => unpaidFor(list, me.value)
 const cardUnpaidTotal = (list: Bill[]) => list.reduce((sum, b) => sum + (b.cardPaidAt ? 0 : b.amountCents), 0)
 const total = (list: Bill[]) => list.reduce((sum, b) => sum + b.amountCents, 0)
 
@@ -65,8 +66,8 @@ const stats = computed(() => {
   const list = hasSelection.value ? selectedBills.value : bills.value
   return [
     { title: hasSelection.value ? 'Selected total' : 'Total this month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value },
-    { title: hasSelection.value ? `Selected unpaid for ${myName.value}` : `${myName.value} still owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value },
-    { title: 'Card unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, ready: readyForCardCents(list) }
+    { title: hasSelection.value ? `Selected unpaid for ${myName.value}` : `${myName.value} still owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value, note: hasSelection.value ? '' : users.value.filter(u => u.id !== me.value).map(u => `${u.name.split(' ')[0]} owes ${formatMoney(unpaidFor(list, u.id))}`).join(' · ') },
+    { title: 'Card unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, note: readyForCardCents(list) ? `${formatMoney(readyForCardCents(list))} ready to pay` : '' }
   ]
 })
 
@@ -232,8 +233,8 @@ function openEdit(bill: Bill) {
           <div class="text-[1.625rem] leading-tight font-bold text-highlighted tabular-nums">
             {{ formatMoney(stat.cents) }}
           </div>
-          <div v-if="stat.ready" class="text-xs font-medium text-primary mt-0.5">
-            {{ formatMoney(stat.ready) }} ready to pay
+          <div v-if="stat.note" class="text-xs font-medium text-primary mt-0.5">
+            {{ stat.note }}
           </div>
         </div>
       </component>
