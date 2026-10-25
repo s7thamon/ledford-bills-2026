@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatMoney, moneyNumber, parseAmount } from '../shared/utils/money'
 import { equalShare, isCustomSplit, splitAmounts } from '../shared/utils/split'
-import { daysInMonth, monthRange, shiftMonth, shortDate, todayIso } from '../shared/utils/dates'
+import { daysInMonth, monthRange, ordinalDay, shiftMonth, todayIso, usDotDate } from '../shared/utils/dates'
 import { canDeleteBill, canEditBill, canMarkCardPaid, canMarkTransferComplete, canMarkReimbursementComplete, reimbursementStatus } from '../shared/utils/rules'
 import { billInTab, filterSuggestions, isBillTab, readyForCardCents, tabCounts } from '../shared/utils/bill-view'
 
@@ -85,13 +85,15 @@ describe('bill view', () => {
     { amountCents: 3000, cardPaidAt: '2026-10-02', participants: [p(1, true), p(2, true)] }
   ]
   it('counts tabs', () => {
-    expect(tabCounts(bills, 1)).toEqual({ all: 3, mine: 1, card: 2, ready: 1 })
-    expect(tabCounts(bills, 2)).toEqual({ all: 3, mine: 0, card: 2, ready: 1 })
-    expect(tabCounts([], 1)).toEqual({ all: 0, mine: 0, card: 0, ready: 0 })
+    expect(tabCounts(bills, 1)).toEqual({ all: 3, mine: 1, theirs: 0, card: 2, ready: 1 })
+    expect(tabCounts(bills, 2)).toEqual({ all: 3, mine: 0, theirs: 1, card: 2, ready: 1 })
+    expect(tabCounts([], 1)).toEqual({ all: 0, mine: 0, theirs: 0, card: 0, ready: 0 })
   })
   it('filters by tab', () => {
     expect(bills.filter(b => billInTab(b, 'ready', 1))).toEqual([bills[1]])
+    expect(bills.filter(b => billInTab(b, 'theirs', 2))).toEqual([bills[0]])
     expect(isBillTab('ready')).toBe(true)
+    expect(isBillTab('theirs')).toBe(true)
     expect(isBillTab('nope')).toBe(false)
   })
   it('sums ready-for-card', () => {
@@ -107,10 +109,12 @@ describe('bill view', () => {
   })
 })
 
-describe('shortDate', () => {
-  it('formats an ISO date as month and day', () => {
-    expect(shortDate('2026-10-24')).toBe('Oct 24')
-    expect(shortDate('2026-01-05')).toBe('Jan 5')
-    expect(shortDate('2026-12-31T23:00:00')).toBe('Dec 31')
+describe('day labels', () => {
+  it('ordinal day of month', () => {
+    expect(['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-31'].map(ordinalDay))
+      .toEqual(['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd', '24th', '31st'])
+  })
+  it('US dotted date', () => {
+    expect(usDotDate('2026-10-03')).toBe('10.03.2026')
   })
 })

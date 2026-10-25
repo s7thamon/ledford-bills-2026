@@ -51,9 +51,11 @@ function setTab(t: string | number) {
   router.replace({ query: { ...route.query, userUnpaid: undefined, cardUnpaid: undefined, tab: t === 'all' ? undefined : String(t) } })
 }
 const counts = computed(() => tabCounts(bills.value, me.value))
+const partnerName = computed(() => users.value.find(u => u.id !== me.value)?.name.split(' ')[0] ?? 'Partner')
 const tabItems = computed(() => [
   { label: 'All', value: 'all', badge: counts.value.all },
   { label: `${myName.value} Unpaid`, value: 'mine', badge: counts.value.mine },
+  { label: `${partnerName.value} Unpaid`, value: 'theirs', badge: counts.value.theirs },
   { label: 'Card Unpaid', value: 'card', badge: counts.value.card },
   { label: 'Ready for Card', value: 'ready', badge: counts.value.ready }
 ].map(item => ({ ...item, badge: { label: String(item.badge), size: 'sm' as const, color: (tab.value === item.value ? 'primary' : 'neutral') as 'primary' | 'neutral', variant: 'soft' as const } })))
@@ -70,6 +72,7 @@ const myUnpaid = (list: Bill[]) => unpaidFor(list, me.value)
 const cardUnpaidTotal = (list: Bill[]) => list.reduce((sum, b) => sum + (b.cardPaidAt ? 0 : b.amountCents), 0)
 const total = (list: Bill[]) => list.reduce((sum, b) => sum + b.amountCents, 0)
 
+const lastMonthDiff = computed(() => total(bills.value) - total(prevBills.value))
 const vsLastMonth = computed(() => {
   if (!prevBills.value.length) return ''
   const diff = total(bills.value) - total(prevBills.value)
@@ -80,8 +83,8 @@ const vsLastMonth = computed(() => {
 const stats = computed(() => {
   const list = hasSelection.value ? selectedBills.value : bills.value
   return [
-    { title: hasSelection.value ? 'Selected Total' : 'Total This Month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value, tab: 'all' as BillTab, note: hasSelection.value ? '' : vsLastMonth.value },
-    { title: hasSelection.value ? `Selected Unpaid for ${myName.value}` : `${myName.value} Still Owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value, tab: 'mine' as BillTab, note: hasSelection.value ? '' : users.value.filter(u => u.id !== me.value).map(u => `${u.name.split(' ')[0]} owes ${formatMoney(unpaidFor(list, u.id))}`).join(' · ') },
+    { title: hasSelection.value ? 'Selected Total' : 'Total This Month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value, tab: 'all' as BillTab, note: hasSelection.value ? '' : vsLastMonth.value, noteIcon: lastMonthDiff.value > 0 ? 'i-lucide-trending-up' : lastMonthDiff.value < 0 ? 'i-lucide-trending-down' : '' },
+    { title: hasSelection.value ? 'Selected Unpaid for You' : 'You Still Owe', icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value, tab: 'mine' as BillTab, note: hasSelection.value ? '' : users.value.filter(u => u.id !== me.value).map(u => `${u.name.split(' ')[0]} owes ${formatMoney(unpaidFor(list, u.id))}`).join(' · ') },
     { title: 'Card Unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, tab: 'ready' as BillTab, note: readyForCardCents(list) ? `${formatMoney(readyForCardCents(list))} ready to pay` : '' }
   ]
 })
@@ -111,6 +114,12 @@ const rows = computed(() => bills.value.filter(b => billInTab(b, tab.value, me.v
 watch(() => rows.value, list => (selected.value = selected.value.filter(id => list.some(b => b.id === id))))
 const sortIcon = (key: SortKey) => sortBy.value !== key ? 'i-lucide-arrow-up-down' : sortDir.value === 'asc' ? 'i-lucide-arrow-up-narrow-wide' : 'i-lucide-arrow-down-wide-narrow'
 
+const UTooltip = resolveComponent('UTooltip')
+const banks = [
+  { label: 'RTP Federal Credit Union (joint account)', url: 'https://www.rtpfcu.org', icon: '/banks/rtpfcu.ico' },
+  { label: 'Citi (credit card)', url: 'https://www.citi.com', icon: '/banks/citi.png' }
+]
+
 // Totals for whatever the active tab shows, e.g. exactly what Ready for Card will put on the card.
 const footerMoney = (cents: number) => rows.value.length ? h('span', { class: 'text-highlighted tabular-nums' }, formatMoney(cents)) : ''
 
@@ -120,7 +129,7 @@ const columns = computed<TableColumn<Bill>[]>(() => [
   { accessorKey: 'amountCents', header: 'Amount', footer: () => footerMoney(total(rows.value)), meta: { class: { th: 'text-right', td: 'text-right' } } },
   { id: 'share', header: 'Each', footer: () => footerMoney(rows.value.reduce((sum, b) => sum + share(b), 0)), meta: { class: { th: 'text-right', td: 'text-right' } } },
   ...users.value.map(u => ({ id: `paid_${u.id}`, header: u.name.split(' ')[0], meta: { class: { th: 'text-center', td: 'text-center' } } })),
-  { id: 'card', header: 'Card', meta: { class: { th: 'text-center', td: 'text-center' } } },
+  { id: 'card', header: 'Card', footer: () => h('div', { class: 'flex justify-center gap-1' }, banks.map(bank => h(UTooltip, { text: bank.label, delayDuration: 0 }, () => h('a', { href: bank.url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': bank.label, class: 'inline-flex size-8 items-center justify-center rounded-full hover:bg-elevated transition' }, [h('img', { src: bank.icon, alt: '', class: 'size-5 rounded-sm' })])))), meta: { class: { th: 'text-center', td: 'text-center' } } },
   { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { td: 'w-px' } } }
 ])
 
@@ -257,7 +266,8 @@ function openEdit(bill: Bill) {
           <div class="text-[1.625rem] leading-tight font-bold text-highlighted tabular-nums">
             {{ formatMoney(stat.cents) }}
           </div>
-          <div v-if="stat.note" class="text-xs font-medium text-primary mt-0.5">
+          <div v-if="stat.note" class="text-xs font-medium text-primary mt-0.5 flex items-center gap-1">
+            <UIcon v-if="'noteIcon' in stat && stat.noteIcon" :name="stat.noteIcon" class="size-3.5" />
             {{ stat.note }}
           </div>
         </div>
@@ -326,7 +336,9 @@ function openEdit(bill: Bill) {
       </template>
 
       <template #addedOn-cell="{ row }">
-        <span class="tabular-nums text-toned">{{ shortDate(row.original.addedOn) }}</span>
+        <UTooltip :text="usDotDate(row.original.addedOn)" :delay-duration="0">
+          <span class="tabular-nums text-toned">{{ ordinalDay(row.original.addedOn) }}</span>
+        </UTooltip>
       </template>
 
       <template #name-cell="{ row }">

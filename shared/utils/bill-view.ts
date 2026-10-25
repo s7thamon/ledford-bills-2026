@@ -1,12 +1,13 @@
 import { canMarkCardPaid, type BillLike } from './rules'
 
-export type BillTab = 'all' | 'mine' | 'card' | 'ready'
-export const BILL_TABS: BillTab[] = ['all', 'mine', 'card', 'ready']
+export type BillTab = 'all' | 'mine' | 'theirs' | 'card' | 'ready'
+export const BILL_TABS: BillTab[] = ['all', 'mine', 'theirs', 'card', 'ready']
 
 export const isBillTab = (v: unknown): v is BillTab => BILL_TABS.includes(v as BillTab)
 
 export function billInTab(bill: BillLike, tab: BillTab, userId: number): boolean {
   if (tab === 'mine') return bill.participants.some(p => p.userId === userId && !p.paidAt)
+  if (tab === 'theirs') return bill.participants.some(p => p.userId !== userId && !p.paidAt)
   if (tab === 'card') return !bill.cardPaidAt
   if (tab === 'ready') return canMarkCardPaid(bill)
   return true

@@ -39,8 +39,15 @@ export function dotDate(iso: string): string {
   return iso.slice(0, 10).replaceAll('-', '.')
 }
 
-/** 2026-10-24 -> Oct 24. The month heading already says which year. */
-export function shortDate(iso: string): string {
-  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+/** 2026-10-03 -> 3rd */
+export function ordinalDay(iso: string): string {
+  const d = Number(iso.slice(8, 10))
+  const suffix = d % 100 >= 11 && d % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[d % 10] ?? 'th'
+  return `${d}${suffix}`
+}
+
+/** 2026-10-03 -> 10.03.2026 */
+export function usDotDate(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${m}.${d}.${y}`
 }
