@@ -6,7 +6,26 @@ import { splitAmounts } from '../../shared/utils/split'
 import { allParticipantsPaid, canDeleteBill, canEditBill, canMarkCardPaid, canMarkParticipantPaid } from '../../shared/utils/rules'
 import * as notify from './notify'
 
-const { bills, billParticipants, users } = schema
+const { bills, billParticipants, refunds, users } = schema
+
+export interface BillCredit {
+  refundId: number
+  amountCents: number
+  shares: Record<number, number>
+  sourceBillId: number
+  sourceName: string
+  sourceAddedOn: string
+  refundedOn: string
+}
+
+export interface BillRefund {
+  id: number
+  amountCents: number
+  refundedOn: string
+  appliedToBillId: number | null
+  appliedToName: string | null
+  appliedToAddedOn: string | null
+}
 
 export interface BillDto {
   id: number
@@ -16,16 +35,64 @@ export interface BillDto {
   cardPaidAt: Date | null
   recurringBillId: number | null
   createdBy: number
+  paidWithCardOf: number | null
   participants: { userId: number, amountCents: number, paidAt: Date | null }[]
+  /** The refund credit this bill absorbed, if any (at most one). */
+  credit: BillCredit | null
+  /** Refunds recorded against this bill. */
+  refunds: BillRefund[]
 }
 
-const withParticipants = { participants: { columns: { userId: true, amountCents: true, paidAt: true }, orderBy: asc(billParticipants.userId) } } as const
-const billColumns = { id: true, name: true, amountCents: true, addedOn: true, cardPaidAt: true, recurringBillId: true, createdBy: true } as const
+const withParticipants = {
+  participants: { columns: { userId: true, amountCents: true, paidAt: true }, orderBy: asc(billParticipants.userId) },
+  refunds: {
+    columns: { id: true, amountCents: true, refundedOn: true, appliedToBillId: true },
+    orderBy: asc(refunds.id),
+    with: { appliedTo: { columns: { name: true, addedOn: true } } }
+  },
+  appliedCredits: {
+    columns: { id: true, amountCents: true, refundedOn: true, billId: true },
+    with: { shares: { columns: { userId: true, amountCents: true } }, bill: { columns: { name: true, addedOn: true } } }
+  }
+} as const
+const billColumns = { id: true, name: true, amountCents: true, addedOn: true, cardPaidAt: true, recurringBillId: true, createdBy: true, paidWithCardOf: true } as const
+
+type BillRow = NonNullable<Awaited<ReturnType<typeof findBill>>>
+
+function findBill(id: number) {
+  return useDb().query.bills.findFirst({ where: eq(bills.id, id), columns: billColumns, with: withParticipants })
+}
+
+function toDto({ refunds: refundRows, appliedCredits, ...bill }: BillRow): BillDto {
+  const applied = appliedCredits[0]
+  return {
+    ...bill,
+    credit: applied
+      ? {
+          refundId: applied.id,
+          amountCents: applied.amountCents,
+          shares: Object.fromEntries(applied.shares.map(s => [s.userId, s.amountCents])),
+          sourceBillId: applied.billId,
+          sourceName: applied.bill.name,
+          sourceAddedOn: applied.bill.addedOn,
+          refundedOn: applied.refundedOn
+        }
+      : null,
+    refunds: refundRows.map(r => ({
+      id: r.id,
+      amountCents: r.amountCents,
+      refundedOn: r.refundedOn,
+      appliedToBillId: r.appliedToBillId,
+      appliedToName: r.appliedTo?.name ?? null,
+      appliedToAddedOn: r.appliedTo?.addedOn ?? null
+    }))
+  }
+}
 
 export async function getBill(id: number): Promise<BillDto> {
-  const bill = await useDb().query.bills.findFirst({ where: eq(bills.id, id), columns: billColumns, with: withParticipants })
+  const bill = await findBill(id)
   if (!bill) throw createError({ statusCode: 404, statusMessage: 'Bill not found.' })
-  return bill
+  return toDto(bill)
 }
 
 export async function listBills(opts: { month: string, userId: number, userUnpaid?: boolean, cardUnpaid?: boolean }): Promise<BillDto[]> {
@@ -36,22 +103,24 @@ export async function listBills(opts: { month: string, userId: number, userUnpai
     with: withParticipants,
     orderBy: [desc(bills.addedOn), desc(bills.id)]
   })
+  const list = rows.map(toDto)
   return opts.userUnpaid
-    ? rows.filter(b => b.participants.some(p => p.userId === opts.userId && !p.paidAt))
-    : rows
+    ? list.filter(b => b.participants.some(p => p.userId === opts.userId && !p.paidAt))
+    : list
 }
 
 export async function searchBills(q: string): Promise<BillDto[]> {
   const term = q.trim()
   if (!term) return []
   const escaped = term.replace(/[\\%_]/g, c => `\\${c}`)
-  return useDb().query.bills.findMany({
+  const rows = await useDb().query.bills.findMany({
     where: like(bills.name, `%${escaped}%`),
     columns: billColumns,
     with: withParticipants,
     orderBy: [desc(bills.addedOn), desc(bills.id)],
     limit: 500
   })
+  return rows.map(toDto)
 }
 
 /** Names used more than once, most common first. */
@@ -131,7 +200,12 @@ export async function updateBill(id: number, input: { name?: string, amountCents
     amounts = splitAmounts(total, ids)
   }
 
+  const amountsChange = !!amounts || (input.amountCents !== undefined && input.amountCents !== bill.amountCents)
   await db.transaction(async (tx) => {
+    // A credit was sized for the old amounts; send it back to unused rather than leave it stale.
+    if (bill.credit && amountsChange) {
+      await tx.update(refunds).set({ appliedToBillId: null, appliedAt: null }).where(eq(refunds.appliedToBillId, id))
+    }
     const patch: Partial<typeof bills.$inferInsert> = {}
     if (input.name !== undefined) patch.name = input.name.trim()
     if (input.amountCents !== undefined) patch.amountCents = input.amountCents
@@ -156,7 +230,7 @@ export async function deleteBill(id: number): Promise<BillDto> {
   return bill
 }
 
-async function notifyIfCardReady(billId: number) {
+export async function notifyIfCardReady(billId: number) {
   const bill = await getBill(billId)
   if (canMarkCardPaid(bill)) await notify.cardReady(bill)
 }
@@ -219,4 +293,14 @@ export async function countUnpaidInMonth(month: string): Promise<number> {
       sql`(${bills.cardPaidAt} is null or exists (select 1 from bill_participants bp where bp.bill_id = ${bills.id} and bp.paid_at is null))`
     ))
   return row?.n ?? 0
+}
+
+/** Mark the purchase as made on someone's personal card (or clear it with null). */
+export async function setPaidWithCard(billId: number, userId: number | null): Promise<BillDto> {
+  await getBill(billId)
+  if (userId !== null && !(await householdIds()).includes(userId)) {
+    throw createError({ statusCode: 422, statusMessage: 'Pick someone in the household.' })
+  }
+  await useDb().update(bills).set({ paidWithCardOf: userId }).where(eq(bills.id, billId))
+  return getBill(billId)
 }

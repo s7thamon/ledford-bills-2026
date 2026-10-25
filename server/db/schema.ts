@@ -66,6 +66,8 @@ export const bills = mysqlTable('bills', {
   amountCents: cents('amount_cents'),
   addedOn: date('added_on', { mode: 'string' }).notNull(),
   cardPaidAt: timestamp('card_paid_at'),
+  /** Set when the purchase went on this person's personal card instead of the shared one. */
+  paidWithCardOf: fk('paid_with_card_of').references(() => users.id, { onDelete: 'set null' }),
   ...timestamps
 }, t => [
   index('bills_added_on_idx').on(t.addedOn),
@@ -80,6 +82,30 @@ export const billParticipants = mysqlTable('bill_participants', {
   paidAt: timestamp('paid_at'),
   ...timestamps
 }, t => [uniqueIndex('bill_participants_unique').on(t.billId, t.userId)])
+
+/** Money a store put back on the card for a bill; becomes a credit a later bill can absorb. */
+export const refunds = mysqlTable('refunds', {
+  id: id(),
+  billId: fk('bill_id').notNull().references(() => bills.id, { onDelete: 'cascade' }),
+  amountCents: cents('amount_cents'),
+  refundedOn: date('refunded_on', { mode: 'string' }).notNull(),
+  createdBy: fk('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  appliedToBillId: fk('applied_to_bill_id').references(() => bills.id, { onDelete: 'set null' }),
+  appliedAt: timestamp('applied_at'),
+  ...timestamps
+}, t => [
+  index('refunds_bill_idx').on(t.billId),
+  // One credit per bill; MySQL allows many NULLs in a unique index.
+  uniqueIndex('refunds_applied_unique').on(t.appliedToBillId)
+])
+
+export const refundShares = mysqlTable('refund_shares', {
+  id: id(),
+  refundId: fk('refund_id').notNull().references(() => refunds.id, { onDelete: 'cascade' }),
+  userId: fk('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  amountCents: cents('amount_cents'),
+  ...timestamps
+}, t => [uniqueIndex('refund_shares_unique').on(t.refundId, t.userId)])
 
 export const reimbursements = mysqlTable('reimbursements', {
   id: id(),
@@ -120,7 +146,17 @@ export const trustedDevices = mysqlTable('trusted_devices', {
 })
 
 export const billsRelations = relations(bills, ({ many }) => ({
-  participants: many(billParticipants)
+  participants: many(billParticipants),
+  refunds: many(refunds, { relationName: 'refundSource' }),
+  appliedCredits: many(refunds, { relationName: 'refundTarget' })
+}))
+export const refundsRelations = relations(refunds, ({ one, many }) => ({
+  bill: one(bills, { fields: [refunds.billId], references: [bills.id], relationName: 'refundSource' }),
+  appliedTo: one(bills, { fields: [refunds.appliedToBillId], references: [bills.id], relationName: 'refundTarget' }),
+  shares: many(refundShares)
+}))
+export const refundSharesRelations = relations(refundShares, ({ one }) => ({
+  refund: one(refunds, { fields: [refundShares.refundId], references: [refunds.id] })
 }))
 export const billParticipantsRelations = relations(billParticipants, ({ one }) => ({
   bill: one(bills, { fields: [billParticipants.billId], references: [bills.id] })
