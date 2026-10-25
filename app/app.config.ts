@@ -2,6 +2,8 @@ export default defineAppConfig({
   ui: {
     colors: {
       primary: 'sky',
+      // Refund credits.
+      secondary: 'violet',
       neutral: 'mist'
     },
     header: {

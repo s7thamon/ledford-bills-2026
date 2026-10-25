@@ -34,6 +34,27 @@ const { data: prevBills, refresh: refreshPrev } = await useFetch('/api/bills', {
 })
 // Live updates only refresh the 'bills' key; follow it so last month's total stays current.
 watch(bills, () => refreshPrev())
+const { data: refunds, refresh: refreshRefunds } = await useFetch('/api/refunds', { key: 'refunds', default: () => [] })
+// Live updates refresh the 'bills' key; follow it so credits stay current too.
+watch(bills, () => refreshRefunds())
+const unusedRefunds = computed(() => refunds.value.filter(r => !r.appliedToBillId))
+const unusedCredits = computed(() => {
+  const totals: Record<number, number> = {}
+  for (const r of unusedRefunds.value) for (const [id, c] of Object.entries(r.shares)) totals[Number(id)] = (totals[Number(id)] ?? 0) + c
+  return { card: unusedRefunds.value.reduce((s, r) => s + r.amountCents, 0), you: totals[me.value] ?? 0, partner: Object.entries(totals).filter(([id]) => Number(id) !== me.value).reduce((s, [, c]) => s + c, 0) }
+})
+const creditsOpen = ref(false)
+const promptOpen = ref(false)
+const promptRefund = ref<(typeof refunds.value)[number] | null>(null)
+const promptBill = ref<Bill | null>(null)
+const refreshAll = () => Promise.all([refresh(), refreshRefunds()])
+
+const refundedCents = (bill: Bill) => bill.refunds.reduce((s, r) => s + r.amountCents, 0)
+const fullyRefunded = (bill: Bill) => refundedCents(bill) >= bill.amountCents
+const refundTip = (bill: Bill) => bill.refunds.map(r => `Refunded ${formatMoney(r.amountCents)} on ${usDotDate(r.refundedOn)}${r.appliedToName ? `, credit used on ${r.appliedToName}` : ', credit not used yet'}`).join(' · ')
+const creditTip = (bill: Bill) => bill.credit ? `Credit from ${bill.credit.sourceName}, refunded ${usDotDate(bill.credit.refundedOn)}` : ''
+const goToMonth = (addedOn: string | null) => addedOn && router.push({ query: { month: addedOn.slice(0, 7) } })
+
 const { data: suggestions, refresh: refreshSuggestions } = await useFetch('/api/bills/suggestions', { key: 'bill-suggestions', default: () => [] })
 
 type Bill = (typeof bills.value)[number]
@@ -51,6 +72,7 @@ function setTab(t: string | number) {
   router.replace({ query: { ...route.query, userUnpaid: undefined, cardUnpaid: undefined, tab: t === 'all' ? undefined : String(t) } })
 }
 const counts = computed(() => tabCounts(bills.value, me.value))
+const firstNameOf = (id: number) => users.value.find(u => u.id === id)?.name.split(' ')[0] ?? 'Someone'
 const partnerName = computed(() => users.value.find(u => u.id !== me.value)?.name.split(' ')[0] ?? 'Partner')
 const tabItems = computed(() => [
   { label: 'All', value: 'all', badge: counts.value.all },
@@ -66,10 +88,10 @@ const share = (bill: Bill) => isCustomSplit(bill.participants.map(p => p.amountC
   : equalShare(bill.amountCents, users.value.length)
 const unpaidFor = (list: Bill[], userId: number) => list.reduce((sum, b) => {
   const p = b.participants.find(p => p.userId === userId)
-  return sum + (p && !p.paidAt ? p.amountCents : 0)
+  return sum + (p && !p.paidAt ? shareDue(p, b.credit) : 0)
 }, 0)
 const myUnpaid = (list: Bill[]) => unpaidFor(list, me.value)
-const cardUnpaidTotal = (list: Bill[]) => list.reduce((sum, b) => sum + (b.cardPaidAt ? 0 : b.amountCents), 0)
+const cardUnpaidTotal = (list: Bill[]) => cardUnpaidCents(list)
 const total = (list: Bill[]) => list.reduce((sum, b) => sum + b.amountCents, 0)
 
 const lastMonthDiff = computed(() => total(bills.value) - total(prevBills.value))
@@ -150,7 +172,15 @@ async function createBill() {
   form.name = ''
   form.amount = ''
   if (bill.addedOn.slice(0, 7) !== month.value) await router.push({ query: {} })
-  await Promise.all([refresh(), refreshSuggestions()])
+  await Promise.all([refresh(), refreshSuggestions(), refreshRefunds()])
+  const offer = [...unusedRefunds.value]
+    .sort((a, b) => a.refundedOn.localeCompare(b.refundedOn) || a.id - b.id)
+    .find(r => canAbsorb(bill, { amountCents: r.amountCents, shares: r.shares }))
+  if (offer) {
+    promptRefund.value = offer
+    promptBill.value = bill
+    promptOpen.value = true
+  }
 }
 
 // Row actions
@@ -179,6 +209,9 @@ const canPaySelectedCard = computed(() => selectedBills.value.some(canMarkCardPa
 
 // Inline edit
 const inline = ref<{ id: number, field: 'name' | 'amount', value: string } | null>(null)
+// The amount a credit was sized for must change through the edit modal, which warns first.
+const canInlineAmount = (bill: Bill) => canEditBill(bill) && !bill.credit
+
 function startInline(bill: Bill, field: 'name' | 'amount') {
   if (!canEditBill(bill)) return
   inline.value = { id: bill.id, field, value: field === 'name' ? bill.name : moneyNumber(bill.amountCents) }
@@ -288,6 +321,16 @@ function openEdit(bill: Bill) {
             @update:model-value="setTab"
           />
         </div>
+        <div v-if="refunds.length && !hasSelection" class="ms-auto">
+          <UButton :color="unusedRefunds.length ? 'secondary' : 'neutral'" variant="soft" size="sm" class="rounded-full" icon="i-lucide-badge-percent" @click="creditsOpen = true">
+            <template v-if="unusedRefunds.length">
+              Credits available · You {{ formatMoney(unusedCredits.you) }} · {{ partnerName }} {{ formatMoney(unusedCredits.partner) }} · Card {{ formatMoney(unusedCredits.card) }}
+            </template>
+            <template v-else>
+              Refund history
+            </template>
+          </UButton>
+        </div>
         <template v-if="tab === 'ready' && !hasSelection && readyIds.length">
           <UButton v-if="!confirmPayAll" size="sm" class="rounded-full px-4 ms-auto" icon="i-lucide-credit-card" @click="confirmPayAll = true">
             Pay Card for All {{ readyIds.length }} · {{ formatMoney(readyForCardCents(bills)) }}
@@ -360,6 +403,16 @@ function openEdit(bill: Bill) {
           :title="canEditBill(row.original) ? 'Click to rename' : undefined"
           @click="canEditBill(row.original) && ($event.stopPropagation(), startInline(row.original, 'name'))"
         >{{ row.original.name }}</span>
+        <UTooltip v-if="row.original.refunds.length" :text="refundTip(row.original)" :delay-duration="0" :content="{ side: 'top' }">
+          <UBadge as="button" color="error" variant="soft" class="ms-2 align-middle" @click.stop="goToMonth(row.original.refunds[0]?.appliedToAddedOn ?? null)">
+            ↩ Refunded −{{ formatMoney(refundedCents(row.original)) }}
+          </UBadge>
+        </UTooltip>
+        <UTooltip v-if="row.original.credit" :text="creditTip(row.original)" :delay-duration="0" :content="{ side: 'top' }">
+          <UBadge as="button" color="secondary" variant="soft" class="ms-2 align-middle" @click.stop="goToMonth(row.original.credit.sourceAddedOn)">
+            ◎ −{{ formatMoney(row.original.credit.amountCents) }} credit
+          </UBadge>
+        </UTooltip>
       </template>
 
       <template #amountCents-cell="{ row }">
@@ -378,9 +431,9 @@ function openEdit(bill: Bill) {
         <span
           v-else
           class="tabular-nums"
-          :class="canEditBill(row.original) && 'hover:underline decoration-dotted cursor-text'"
-          :title="canEditBill(row.original) ? 'Click to change (resets to an even split)' : undefined"
-          @click="canEditBill(row.original) && ($event.stopPropagation(), startInline(row.original, 'amount'))"
+          :class="[canInlineAmount(row.original) && 'hover:underline decoration-dotted cursor-text', fullyRefunded(row.original) && 'line-through text-muted']"
+          :title="canInlineAmount(row.original) ? 'Click to change (resets to an even split)' : row.original.credit && canEditBill(row.original) ? 'Has a refund credit; change it from Edit' : undefined"
+          @click="canInlineAmount(row.original) && ($event.stopPropagation(), startInline(row.original, 'amount'))"
         >{{ formatMoney(row.original.amountCents) }}</span>
       </template>
 
@@ -389,15 +442,20 @@ function openEdit(bill: Bill) {
           <UTooltip v-if="isCustomSplit(row.original.participants.map(p => p.amountCents))" text="Custom split">
             <UIcon name="i-lucide-arrow-left-right" class="size-3.5 text-muted" />
           </UTooltip>
-          {{ formatMoney(share(row.original)) }}
+          <span :class="fullyRefunded(row.original) && 'line-through text-muted'">{{ formatMoney(share(row.original)) }}</span>
         </span>
       </template>
 
       <template v-for="u in users" :key="u.id" #[`paid_${u.id}-cell`]="{ row }">
         <template v-for="p in [row.original.participants.find(x => x.userId === u.id)]" :key="u.id">
-          <UBadge v-if="p?.paidAt" color="success" variant="soft" size="md" icon="i-lucide-check">
-            Paid
-          </UBadge>
+          <div v-if="p?.paidAt" class="inline-flex flex-col items-center">
+            <UBadge color="success" variant="soft" size="md" icon="i-lucide-check">
+              Paid
+            </UBadge>
+            <span v-if="row.original.credit" class="text-xs font-medium text-violet-700 dark:text-violet-300 mt-0.5 tabular-nums">
+              + {{ formatMoney(row.original.credit.shares[u.id] ?? 0) }} credit
+            </span>
+          </div>
           <UButton
             v-else-if="p && (u.id === me || adminMode)"
             size="sm"
@@ -407,7 +465,7 @@ function openEdit(bill: Bill) {
             :loading="busy === `pay:${row.original.id}:${u.id}`"
             @click.stop="payFor(row.original, u.id)"
           >
-            {{ u.id === me ? 'Pay' : 'Mark Paid' }}
+            {{ u.id === me ? 'Pay' : 'Mark Paid' }}<template v-if="row.original.credit">&nbsp;{{ formatMoney(shareDue(p, row.original.credit)) }}</template>
           </UButton>
           <UBadge v-else-if="p" color="warning" variant="soft" size="md">
             Waiting
@@ -417,11 +475,21 @@ function openEdit(bill: Bill) {
       </template>
 
       <template #card-cell="{ row }">
-        <UBadge v-if="row.original.cardPaidAt" color="success" variant="soft" size="md" icon="i-lucide-check">
-          Paid
-        </UBadge>
+        <UTooltip v-if="row.original.paidWithCardOf" :text="`Paid with ${firstNameOf(row.original.paidWithCardOf)}'s personal card; not on the shared Citi card`" :delay-duration="0" :content="{ side: 'top' }">
+          <UBadge color="neutral" variant="soft" size="md" icon="i-lucide-wallet">
+            {{ firstNameOf(row.original.paidWithCardOf) }}'s card
+          </UBadge>
+        </UTooltip>
+        <div v-else-if="row.original.cardPaidAt" class="inline-flex flex-col items-center">
+          <UBadge color="success" variant="soft" size="md" icon="i-lucide-check">
+            Paid
+          </UBadge>
+          <span v-if="row.original.credit" class="text-xs font-medium text-violet-700 dark:text-violet-300 mt-0.5 tabular-nums">
+            + {{ formatMoney(row.original.credit.amountCents) }} credit
+          </span>
+        </div>
         <UButton v-else-if="canMarkCardPaid(row.original)" size="sm" variant="outline" class="rounded-full px-4" :loading="busy === `card:${row.original.id}`" @click.stop="payCard(row.original)">
-          Pay Card
+          Pay Card<template v-if="row.original.credit">&nbsp;{{ formatMoney(cardDue(row.original)) }}</template>
         </UButton>
         <span v-else class="text-dimmed">—</span>
       </template>
@@ -435,6 +503,8 @@ function openEdit(bill: Bill) {
 
     </div>
 
-    <BillEditModal v-model:open="editOpen" :bill="editingBill" :users="users" @changed="refresh" />
+    <BillEditModal v-model:open="editOpen" :bill="editingBill" :users="users" @changed="refreshAll" />
+    <CreditPromptModal v-model:open="promptOpen" :refund="promptRefund" :bill="promptBill" :users="users" @changed="refreshAll" />
+    <CreditsModal v-model:open="creditsOpen" :refunds="refunds" :bills="bills" :users="users" @changed="refreshAll" />
   </div>
 </template>

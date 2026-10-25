@@ -3,7 +3,11 @@ interface Bill {
   id: number
   name: string
   amountCents: number
+  addedOn: string
   cardPaidAt: string | null
+  paidWithCardOf: number | null
+  credit: { amountCents: number, shares: Record<number, number>, sourceName: string } | null
+  refunds: { amountCents: number }[]
   participants: { userId: number, amountCents: number, paidAt: string | null }[]
 }
 
@@ -21,6 +25,18 @@ const confirmDelete = ref(false)
 const editable = computed(() => !!props.bill && canEditBill(props.bill))
 const deletable = computed(() => !!props.bill && canDeleteBill(props.bill))
 const totalCents = computed(() => parseAmount(amount.value))
+const refundOpen = ref(false)
+const refundable = computed(() => !!props.bill && !editable.value && !props.bill.paidWithCardOf
+  && props.bill.amountCents > props.bill.refunds.reduce((s, r) => s + r.amountCents, 0))
+const amountsChanged = computed(() => !!props.bill && (totalCents.value !== props.bill.amountCents
+  || props.bill.participants.some(p => parseAmount(splits.value[p.userId]) !== p.amountCents)))
+
+// USelect cannot hold null, so 0 stands for the shared card.
+const cardItems = computed(() => [{ label: 'Shared card (Citi)', value: 0 }, ...props.users.map(u => ({ label: `${u.name.split(' ')[0]}'s personal card`, value: u.id }))])
+async function setCard(userId: number) {
+  if (!props.bill) return
+  if (await run(() => $fetch(`/api/bills/${props.bill!.id}/card`, { method: 'PUT', body: { userId: userId || null } }), userId ? 'Marked as paid with a different card' : 'Back on the shared card')) emit('changed')
+}
 
 watch(() => [open.value, props.bill] as const, ([isOpen, bill]) => {
   if (!isOpen || !bill) return
@@ -72,7 +88,19 @@ async function remove() {
           <UInput v-model="amount" icon="i-lucide-dollar-sign" inputmode="decimal" :disabled="!editable" class="w-full" @update:model-value="resplit" />
         </UFormField>
         <SplitFields v-model="splits" :users="users" :total-cents="totalCents" :disabled="!editable" />
+        <UFormField label="Paid With" help="Pick a personal card if this was not charged to the shared Citi card.">
+          <USelect :model-value="bill?.paidWithCardOf ?? 0" :items="cardItems" class="w-full" :disabled="!bill || !!bill.cardPaidAt || !!bill.credit" @update:model-value="v => setCard(Number(v))" />
+        </UFormField>
+        <UAlert
+          v-if="bill?.credit && amountsChanged"
+          color="warning"
+          variant="soft"
+          icon="i-lucide-triangle-alert"
+          :title="`Saving removes the −${formatMoney(bill.credit.amountCents)} credit from ${bill.credit.sourceName}`"
+          description="The amounts it was sized for are changing. The credit becomes available again for another bill."
+        />
       </form>
+      <RefundModal v-model:open="refundOpen" :bill="bill" :users="users" @changed="open = false; emit('changed')" />
     </template>
     <template #footer>
       <div class="flex w-full items-center gap-2">
@@ -84,6 +112,9 @@ async function remove() {
             Confirm delete
           </UButton>
         </template>
+        <UButton v-if="refundable" color="error" variant="soft" icon="i-lucide-undo-2" @click="refundOpen = true">
+          Record Refund
+        </UButton>
         <div class="flex-1" />
         <UButton color="neutral" variant="soft" @click="open = false">
           Cancel

@@ -63,6 +63,16 @@ const columns: TableColumn<Bill>[] = [
         </template>
         <template #name-cell="{ row }">
           <span class="font-semibold text-highlighted">{{ row.original.name }}</span>
+          <UTooltip v-if="row.original.refunds.length" :text="row.original.refunds.map(r => `Refunded ${formatMoney(r.amountCents)} on ${usDotDate(r.refundedOn)}`).join(' · ')" :delay-duration="0" :content="{ side: 'top' }">
+            <UBadge color="error" variant="soft" class="ms-2 align-middle">
+              ↩ Refunded −{{ formatMoney(row.original.refunds.reduce((s, r) => s + r.amountCents, 0)) }}
+            </UBadge>
+          </UTooltip>
+          <UTooltip v-if="row.original.credit" :text="`Credit from ${row.original.credit.sourceName}, refunded ${usDotDate(row.original.credit.refundedOn)}`" :delay-duration="0" :content="{ side: 'top' }">
+            <UBadge color="secondary" variant="soft" class="ms-2 align-middle">
+              ◎ −{{ formatMoney(row.original.credit.amountCents) }} credit
+            </UBadge>
+          </UTooltip>
         </template>
         <template #amountCents-cell="{ row }">
           <span class="tabular-nums">{{ formatMoney(row.original.amountCents) }}</span>
@@ -77,7 +87,10 @@ const columns: TableColumn<Bill>[] = [
           <UBadge v-if="row.original.cardPaidAt" color="success" variant="soft" size="md" icon="i-lucide-check">
             Settled
           </UBadge>
-          <UBadge v-else-if="allParticipantsPaid(row.original)" color="primary" variant="soft" size="md">
+          <UBadge v-else-if="row.original.paidWithCardOf" color="neutral" variant="soft" size="md" icon="i-lucide-wallet">
+          Personal card
+        </UBadge>
+        <UBadge v-else-if="allParticipantsPaid(row.original)" color="primary" variant="soft" size="md">
             Card due
           </UBadge>
           <UBadge v-else color="warning" variant="soft" size="md">
