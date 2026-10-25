@@ -44,7 +44,7 @@ async function resend() {
         Check your email
       </h1>
       <p class="text-sm text-muted">
-        We sent a 6-digit code. This device will be remembered for 30 days.
+        We sent a 6-digit code. This device will be remembered for 4 months.
       </p>
     </div>
     <UAlert v-if="error" color="error" variant="subtle" :title="error" icon="i-lucide-circle-alert" />

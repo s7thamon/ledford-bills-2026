@@ -32,7 +32,7 @@ export default defineNuxtConfig({
       // Set NUXT_SESSION_PASSWORD (32+ chars) in the environment.
       password: '',
       // Session lives as long as a trusted device; the password is still required after it expires.
-      maxAge: 60 * 60 * 24 * 30,
+      maxAge: 60 * 60 * 24 * 120,
       cookie: { sameSite: 'lax' }
     }
   },

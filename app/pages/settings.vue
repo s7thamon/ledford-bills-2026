@@ -122,7 +122,7 @@ const fmtDate = (d: string) => new Date(d).toLocaleString('en-US', { dateStyle: 
           Trusted devices
         </h2>
         <p class="text-sm text-muted">
-          These skip the emailed sign-in code for 30 days after their last use.
+          These skip the emailed sign-in code for 4 months after their last use.
         </p>
       </template>
       <ul v-if="devices.length" class="divide-y divide-default">
