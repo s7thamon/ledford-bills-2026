@@ -26,6 +26,14 @@ const { data: bills, refresh, status } = await useFetch('/api/bills', {
   query: computed(() => ({ month: month.value })),
   default: () => []
 })
+const prevMonth = computed(() => shiftMonth(month.value, -1))
+const { data: prevBills, refresh: refreshPrev } = await useFetch('/api/bills', {
+  key: 'bills-prev',
+  query: computed(() => ({ month: prevMonth.value })),
+  default: () => []
+})
+// Live updates only refresh the 'bills' key; follow it so last month's total stays current.
+watch(bills, () => refreshPrev())
 const { data: suggestions, refresh: refreshSuggestions } = await useFetch('/api/bills/suggestions', { key: 'bill-suggestions', default: () => [] })
 
 type Bill = (typeof bills.value)[number]
@@ -62,10 +70,17 @@ const myUnpaid = (list: Bill[]) => unpaidFor(list, me.value)
 const cardUnpaidTotal = (list: Bill[]) => list.reduce((sum, b) => sum + (b.cardPaidAt ? 0 : b.amountCents), 0)
 const total = (list: Bill[]) => list.reduce((sum, b) => sum + b.amountCents, 0)
 
+const vsLastMonth = computed(() => {
+  if (!prevBills.value.length) return ''
+  const diff = total(bills.value) - total(prevBills.value)
+  const label = monthLabel(prevMonth.value).split(' ')[0]
+  return diff === 0 ? `Same as ${label}` : `${diff > 0 ? '+' : '−'}${formatMoney(Math.abs(diff))} vs ${label}`
+})
+
 const stats = computed(() => {
   const list = hasSelection.value ? selectedBills.value : bills.value
   return [
-    { title: hasSelection.value ? 'Selected total' : 'Total this month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value },
+    { title: hasSelection.value ? 'Selected total' : 'Total this month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value, note: hasSelection.value ? '' : vsLastMonth.value },
     { title: hasSelection.value ? `Selected unpaid for ${myName.value}` : `${myName.value} still owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value, note: hasSelection.value ? '' : users.value.filter(u => u.id !== me.value).map(u => `${u.name.split(' ')[0]} owes ${formatMoney(unpaidFor(list, u.id))}`).join(' · ') },
     { title: 'Card unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, note: readyForCardCents(list) ? `${formatMoney(readyForCardCents(list))} ready to pay` : '' }
   ]
