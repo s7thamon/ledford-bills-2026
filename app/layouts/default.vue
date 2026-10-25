@@ -78,7 +78,7 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
 
       <template #right>
         <form class="hidden md:block" @submit.prevent="submitSearch">
-          <UInput ref="searchInput" v-model="search" icon="i-lucide-search" placeholder="Search Bills" class="w-60" :ui="{ base: 'rounded-full' }" aria-label="Search Bills">
+          <UInput ref="searchInput" v-model="search" icon="i-lucide-search" placeholder="Search All Bills" class="w-60" :ui="{ base: 'rounded-full' }" aria-label="Search All Bills">
             <template #trailing>
               <UKbd value="meta" />
               <UKbd value="k" />
@@ -118,7 +118,7 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
 
       <template #body>
         <form class="mb-4" @submit.prevent="submitSearch">
-          <UInput v-model="search" icon="i-lucide-search" placeholder="Search Bills" class="w-full" aria-label="Search Bills" />
+          <UInput v-model="search" icon="i-lucide-search" placeholder="Search All Bills" class="w-full" aria-label="Search All Bills" />
         </form>
         <UNavigationMenu :items="nav" orientation="vertical" class="-mx-2.5" />
       </template>

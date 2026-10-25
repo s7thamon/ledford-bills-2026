@@ -62,7 +62,7 @@ describe('bills', () => {
     sentMail.length = 0
     await markParticipantPaid(bill.id, kelly, kelly, false)
     await flushMail()
-    expect(sentMail.map(m => [m.to, m.subject])).toEqual([['kelly@example.com', 'Card Ready to Pay - "Card"']])
+    expect(sentMail.map(m => [m.to, m.subject])).toEqual([['kelly@example.com', 'Card Ready to Pay - "Card" - $10.00']])
     await markCardPaid(bill.id)
     await expectHttpError(markCardPaid(bill.id), 409)
   })

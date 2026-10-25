@@ -11,6 +11,15 @@ beforeEach(async () => {
 })
 
 describe('reimbursements', () => {
+  it('searches by name or amount', async () => {
+    await createReimbursement({ name: 'Concert', owedCents: 2680, createdBy: tim })
+    await createReimbursement({ name: 'Gas', owedCents: 1234, createdBy: tim })
+    const names = async (q: string) => (await listReimbursements({ resolved: false, page: 1, sort: 'name', dir: 'asc', q })).items.map(r => r.name)
+    expect(await names('conc')).toEqual(['Concert'])
+    expect(await names('$26.8')).toEqual(['Concert'])
+    expect(await names('12.34')).toEqual(['Gas'])
+  })
+
   it('assigns the other user and emails both sides', async () => {
     const r = await createReimbursement({ name: 'Concert', owedCents: 5000, createdBy: tim, notes: 'Row F' })
     expect(r.otherUserId).toBe(kelly)

@@ -129,7 +129,14 @@ function sort(key: SortKey) {
   }
 }
 const sortValue = (b: Bill) => sortBy.value === 'share' ? share(b) : sortBy.value === 'amountCents' ? b.amountCents : b.addedOn + String(b.id).padStart(10, '0')
-const rows = computed(() => bills.value.filter(b => billInTab(b, tab.value, me.value)).sort((a, b) => {
+const search = ref('')
+watch([tab, month], () => (search.value = ''))
+const matchesSearch = (b: Bill) => {
+  const q = search.value.trim().toLowerCase()
+  const digits = q.replace(/[$,\s]/g, '')
+  return !q || b.name.toLowerCase().includes(q) || (!!digits && moneyNumber(b.amountCents).includes(digits))
+}
+const rows = computed(() => bills.value.filter(b => billInTab(b, tab.value, me.value) && matchesSearch(b)).sort((a, b) => {
   const [x, y] = [sortValue(a), sortValue(b)]
   return (x < y ? -1 : x > y ? 1 : 0) * (sortDir.value === 'asc' ? 1 : -1)
 }))
@@ -332,6 +339,7 @@ function openEdit(bill: Bill) {
             </template>
           </UButton>
         </div>
+        <UInput v-if="tab === 'all' && !hasSelection" v-model="search" icon="i-lucide-search" :placeholder="`Search ${monthLabel(month).split(' ')[0]}`" :aria-label="`Search ${monthLabel(month)} bills by name or amount`" size="sm" class="w-48" :class="!refunds.length && 'ms-auto'" />
         <template v-if="tab === 'ready' && !hasSelection && readyIds.length">
           <UButton v-if="!confirmPayAll" size="sm" class="rounded-full px-4 ms-auto" icon="i-lucide-credit-card" @click="confirmPayAll = true">
             Pay Card for All {{ readyIds.length }} · {{ formatMoney(readyForCardCents(bills)) }}

@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, isNull, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, isNull, like, or, sql, type SQL } from 'drizzle-orm'
 import { createError } from 'h3'
 import { schema, useDb } from '../db/client'
 import { canEditReimbursement, canMarkReimbursementComplete, canMarkTransferComplete, reimbursementStatus } from '../../shared/utils/rules'
@@ -16,9 +16,14 @@ export async function getReimbursement(id: number) {
   return row
 }
 
-export async function listReimbursements(opts: { resolved: boolean, page: number, sort: ReimbursementSort, dir: 'asc' | 'desc' }) {
+export async function listReimbursements(opts: { resolved: boolean, page: number, sort: ReimbursementSort, dir: 'asc' | 'desc', q?: string }) {
   const db = useDb()
-  const where = opts.resolved ? undefined : isNull(reimbursements.completedAt)
+  const digits = opts.q?.replace(/[$,\s]/g, '')
+  // Matches the name, or the amount as typed ("26.8" finds $26.80).
+  const search = opts.q
+    ? or(like(reimbursements.name, `%${opts.q}%`), digits ? like(sql`cast(${reimbursements.owedCents} / 100 as decimal(12,2))`, `%${digits}%`) : undefined)
+    : undefined
+  const where = and(opts.resolved ? undefined : isNull(reimbursements.completedAt), search)
   const order = opts.dir === 'asc' ? asc : desc
   const statusRank = sql`case when ${reimbursements.completedAt} is not null then 2 when ${reimbursements.transferCompletedAt} is not null then 1 else 0 end`
   const primary: SQL = opts.sort === 'name'

@@ -15,6 +15,8 @@ async function usersById(ids: number[]) {
 }
 
 const billUrl = (bill: BillInfo) => appUrl(`/?month=${bill.addedOn.slice(0, 7)}`)
+// Gmail threads mails with the same subject, so the amount keeps two same-named bills (two Costco runs) apart.
+const billSubject = (prefix: string, bill: BillInfo) => `${prefix} - "${bill.name}" - ${formatMoney(bill.amountCents)}`
 
 export async function billAdded(bill: BillInfo, participants: { userId: number, amountCents: number }[]) {
   const users = await usersById(participants.map(p => p.userId))
@@ -23,7 +25,7 @@ export async function billAdded(bill: BillInfo, participants: { userId: number, 
     if (!user) continue
     queueMail({
       to: user.email,
-      subject: `New Bill Added - "${bill.name}"`,
+      subject: billSubject('New Bill Added', bill),
       lines: ['A new bill has been added.', `Bill: ${bill.name}`, `Total Amount: ${formatMoney(bill.amountCents)}`, `Your Share: ${formatMoney(p.amountCents)}`],
       action: { label: 'View Bill', url: billUrl(bill) }
     })
@@ -35,7 +37,7 @@ export async function cardReady(bill: BillInfo) {
   if (!owner) return
   queueMail({
     to: owner.email,
-    subject: `Card Ready to Pay - "${bill.name}"`,
+    subject: billSubject('Card Ready to Pay', bill),
     lines: ['This bill has been paid by all parties.', `Bill: ${bill.name}`, `Total Amount: ${formatMoney(bill.amountCents)}`, 'The card is now ready to be paid.'],
     action: { label: 'View Bill', url: billUrl(bill) }
   })

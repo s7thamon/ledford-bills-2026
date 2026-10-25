@@ -5,7 +5,8 @@ const Query = z.object({
   resolved: z.stringbool().default(false),
   page: z.coerce.number().int().min(1).default(1),
   sort: z.enum(['createdAt', 'name', 'owedCents', 'status']).default('createdAt'),
-  dir: z.enum(['asc', 'desc']).default('desc')
+  dir: z.enum(['asc', 'desc']).default('desc'),
+  q: z.string().trim().max(100).optional()
 })
 
 export default defineEventHandler(async (event) => {

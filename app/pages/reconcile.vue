@@ -113,6 +113,10 @@ const matchedBillIds = computed(() => new Set([...matches.value.map(m => m.billI
 const leftoverBills = computed(() => bills.value.filter(b => b.addedOn >= shift(range.value.from, -5) && b.addedOn <= shift(range.value.to, 5) && !matchedBillIds.value.has(b.id)))
 
 const inRange = (d: string) => d >= range.value.from && d <= range.value.to
+// Bills dated just outside the statement are usually on the neighbouring statement, so they start hidden.
+const showOutside = ref(false)
+const outsideCount = computed(() => leftoverBills.value.filter(b => !inRange(b.addedOn)).length)
+const shownBills = computed(() => showOutside.value ? leftoverBills.value : leftoverBills.value.filter(b => inRange(b.addedOn)))
 const statementTotal = computed(() => lines.value.filter(l => l.kind !== 'payment').reduce((s, l) => s + l.amountCents, 0))
 const appTotal = computed(() => bills.value.filter(b => inRange(b.addedOn)).reduce((s, b) => s + b.amountCents, 0)
   - refunds.value.filter(r => inRange(r.refundedOn)).reduce((s, r) => s + r.amountCents, 0))
@@ -121,7 +125,7 @@ const offBy = computed(() => leftoverLines.value.reduce((s, l) => s + l.amountCe
   // Bills dated outside the statement are shown (they may match a nearby line) but may simply not have posted yet.
   - leftoverBills.value.filter(b => inRange(b.addedOn)).reduce((s, b) => s + b.amountCents, 0))
 const autoCount = computed(() => matches.value.filter(m => m.kind === 'auto').length + refundMatches.value.length + pMatches.value.filter(m => m.kind === 'auto').length)
-const needsYou = computed(() => leftoverLines.value.length + leftoverBills.value.length + suggestions.value.length + pLeftoverLines.value.length + pSuggestions.value.length)
+const needsYou = computed(() => leftoverLines.value.length + leftoverBills.value.filter(b => inRange(b.addedOn)).length + suggestions.value.length + pLeftoverLines.value.length + pSuggestions.value.length)
 
 function snapshot() {
   history.value.push(JSON.stringify({ matches: matches.value, assigned: assigned.value, ignored: ignored.value, suggestions: suggestions.value, dismissed: dismissed.value }))
@@ -418,14 +422,17 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
           </div>
 
           <div class="surface-card p-4 space-y-2 min-h-40">
-            <div class="font-semibold text-highlighted">
-              Bills With No Match <span class="text-muted font-normal">· {{ leftoverBills.length }}</span>
+            <div class="flex items-center justify-between gap-3">
+              <div class="font-semibold text-highlighted">
+                Bills With No Match <span class="text-muted font-normal">· {{ shownBills.length }}</span>
+              </div>
+              <USwitch v-if="outsideCount" v-model="showOutside" size="sm" :label="`Show before & after statement (${outsideCount})`" />
             </div>
-            <p v-if="!leftoverBills.length" class="text-sm text-muted">
+            <p v-if="!shownBills.length" class="text-sm text-muted">
               Every bill in this range has a Citi line.
             </p>
             <div
-              v-for="b in leftoverBills"
+              v-for="b in shownBills"
               :key="b.id"
               role="button"
               tabindex="0"
@@ -440,7 +447,7 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
             >
               <div class="flex justify-between gap-3 font-semibold text-highlighted">
                 <span>{{ b.name }} <span class="text-xs font-normal text-muted">{{ usDotDate(b.addedOn) }}</span>
-                  <UBadge v-if="!inRange(b.addedOn)" color="neutral" variant="soft" size="sm" class="ms-1">{{ b.addedOn > range.to ? 'After statement' : 'Before statement' }}</UBadge></span>
+                  <UBadge v-if="!inRange(b.addedOn)" :color="b.addedOn > range.to ? 'warning' : 'info'" variant="soft" size="sm" class="ms-1">{{ b.addedOn > range.to ? 'After statement' : 'Before statement' }}</UBadge></span>
                 <span class="tabular-nums">{{ formatMoney(b.amountCents) }}</span>
               </div>
               <div class="text-xs text-toned tabular-nums mt-0.5">

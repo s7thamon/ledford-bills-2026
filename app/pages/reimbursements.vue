@@ -13,18 +13,19 @@ const resolved = ref(false)
 const page = ref(1)
 const sort = ref<Sort>('createdAt')
 const dir = ref<'asc' | 'desc'>('desc')
-watch(resolved, () => (page.value = 1))
+const search = ref('')
+watch([resolved, search], () => (page.value = 1))
 
 const { data: users } = await useFetch('/api/users', { key: 'users', default: () => [] })
 const { data, refresh, status } = await useFetch('/api/reimbursements', {
   key: 'reimbursements',
-  query: computed(() => ({ resolved: resolved.value, page: page.value, sort: sort.value, dir: dir.value })),
+  query: computed(() => ({ resolved: resolved.value, page: page.value, sort: sort.value, dir: dir.value, q: search.value.trim() || undefined })),
   default: () => ({ items: [], total: 0, pageSize: 10 })
 })
 // Count for the inactive tab; the active tab's count is data.total.
 const { data: other, refresh: refreshOther } = await useFetch('/api/reimbursements', {
   key: 'reimbursements-other',
-  query: computed(() => ({ resolved: !resolved.value, page: 1 })),
+  query: computed(() => ({ resolved: !resolved.value, page: 1, q: search.value.trim() || undefined })),
   default: () => ({ items: [], total: 0, pageSize: 10 })
 })
 // Live updates only refresh the 'reimbursements' key, so follow the active list to keep this count current.
@@ -134,7 +135,7 @@ function openEdit(item: Item) {
     </div>
 
     <div class="surface-card overflow-hidden">
-      <div class="px-4 py-3 border-b border-default">
+      <div class="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-default">
         <UTabs
           :model-value="resolved ? 'all' : 'open'"
           :items="tabItems"
@@ -145,6 +146,7 @@ function openEdit(item: Item) {
           :ui="{ list: 'bg-transparent p-0 gap-1', trigger: 'rounded-full px-3.5 py-1.5 font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none before:hidden', indicator: 'hidden' }"
           @update:model-value="v => (resolved = v === 'all')"
         />
+        <UInput v-model="search" icon="i-lucide-search" placeholder="Search Reimbursements" aria-label="Search reimbursements by name or amount" size="sm" class="w-48 ms-auto" />
       </div>
 
       <UTable :data="data.items" :columns="columns" :loading="status === 'pending'" empty="Nothing waiting. All settled up.">
