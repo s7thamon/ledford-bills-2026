@@ -20,7 +20,7 @@ const sum = computed(() => props.users.reduce((acc, u) => acc + parseAmount(spli
 <template>
   <div class="space-y-3">
     <div class="grid grid-cols-2 gap-3">
-      <UFormField v-for="u in users" :key="u.id" :label="`${u.name.split(' ')[0]} pays`">
+      <UFormField v-for="u in users" :key="u.id" :label="`${u.name.split(' ')[0]} Pays`">
         <UInput
           :model-value="splits[u.id]"
           icon="i-lucide-dollar-sign"

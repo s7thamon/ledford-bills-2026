@@ -30,7 +30,7 @@ const columns: TableColumn<Bill>[] = [
   <div class="space-y-8">
     <div>
       <h1 class="text-2xl font-semibold text-highlighted">
-        {{ q ? `Results for "${q}"` : 'Search bills' }}
+        {{ q ? `Results for "${q}"` : 'Search Bills' }}
       </h1>
       <p v-if="q" class="text-sm text-muted">
         {{ results.length }} bill{{ results.length === 1 ? '' : 's' }}<template v-if="results.length">, averaging {{ formatMoney(average) }}</template>

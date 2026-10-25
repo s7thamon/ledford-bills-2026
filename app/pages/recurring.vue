@@ -89,7 +89,7 @@ function openEdit(item: Item) {
       <form class="flex flex-wrap items-center gap-3" autocomplete="off" @submit.prevent="create">
         <USelect v-model="form.type" :items="typeItems" class="w-40" aria-label="Type" />
         <UInput v-model="form.name" icon="i-lucide-receipt-text" placeholder="Name" aria-label="Name" class="w-48" />
-        <USelect v-if="form.type === 'reimbursement'" v-model="form.otherUserId" :items="userItems" placeholder="Who owes" class="w-40" aria-label="Who owes" />
+        <USelect v-if="form.type === 'reimbursement'" v-model="form.otherUserId" :items="userItems" placeholder="Who Owes" class="w-40" aria-label="Who owes" />
         <UInput v-model="form.amount" icon="i-lucide-dollar-sign" :placeholder="form.type === 'reimbursement' ? 'Owed' : 'Amount'" aria-label="Amount" inputmode="decimal" class="w-32" />
         <UInputNumber v-model="form.day" :min="1" :max="31" placeholder="Day" aria-label="Day of month" class="w-28" />
         <UButton type="submit" :loading="creating" icon="i-lucide-plus">

@@ -76,17 +76,17 @@ async function remove() {
           <UFormField label="Type">
             <USelect v-model="state.type" :items="typeItems" class="w-full" @update:model-value="state.type === 'bill' && evenSplits()" />
           </UFormField>
-          <UFormField label="Day of month" hint="1-31">
+          <UFormField label="Day of Month" hint="1-31">
             <UInputNumber v-model="state.day" :min="1" :max="31" class="w-full" />
           </UFormField>
         </div>
         <UFormField label="Name" required>
           <UInput v-model="state.name" class="w-full" />
         </UFormField>
-        <UFormField v-if="state.type === 'reimbursement'" label="Who owes" required>
+        <UFormField v-if="state.type === 'reimbursement'" label="Who Owes" required>
           <USelect v-model="state.otherUserId" :items="userItems" placeholder="Select" class="w-full" />
         </UFormField>
-        <UFormField :label="state.type === 'reimbursement' ? 'Amount owed' : 'Amount'" required>
+        <UFormField :label="state.type === 'reimbursement' ? 'Amount Owed' : 'Amount'" required>
           <UInput v-model="state.amount" icon="i-lucide-dollar-sign" inputmode="decimal" class="w-full" @update:model-value="state.type === 'bill' && evenSplits()" />
         </UFormField>
         <SplitFields v-if="state.type === 'bill'" v-model="splits" :users="users" :total-cents="totalCents" />

@@ -47,7 +47,7 @@ async function remove() {
         <UFormField label="Name" required>
           <UInput v-model="state.name" class="w-full" />
         </UFormField>
-        <UFormField label="Amount owed" required>
+        <UFormField label="Amount Owed" required>
           <UInput v-model="state.owed" icon="i-lucide-dollar-sign" inputmode="decimal" class="w-full" />
         </UFormField>
         <UFormField label="Notes" hint="Optional">

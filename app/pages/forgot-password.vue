@@ -1,6 +1,6 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'auth' })
-useHead({ title: 'Forgot password' })
+useHead({ title: 'Forgot Password' })
 
 const email = ref('')
 const loading = ref(false)
@@ -27,7 +27,7 @@ async function submit() {
   <form class="space-y-4" @submit.prevent="submit">
     <div>
       <h1 class="text-lg font-semibold text-highlighted">
-        Forgot your password?
+        Forgot Your Password?
       </h1>
       <p class="text-sm text-muted">
         We will email you a reset link.
@@ -39,7 +39,7 @@ async function submit() {
       <UInput v-model="email" type="email" autocomplete="username" autofocus class="w-full" />
     </UFormField>
     <UButton type="submit" block :loading="loading">
-      Email reset link
+      Email Reset Link
     </UButton>
     <div class="text-center">
       <ULink to="/login" class="text-sm text-muted hover:text-default">

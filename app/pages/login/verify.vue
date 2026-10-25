@@ -1,6 +1,6 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'auth' })
-useHead({ title: 'Check your email' })
+useHead({ title: 'Check Your Email' })
 
 const code = ref<number[]>([])
 const loading = ref(false)
@@ -41,7 +41,7 @@ async function resend() {
   <form class="space-y-4" @submit.prevent="submit">
     <div>
       <h1 class="text-lg font-semibold text-highlighted">
-        Check your email
+        Check Your Email
       </h1>
       <p class="text-sm text-muted">
         We sent a 6-digit code. This device will be remembered for 4 months.

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'auth' })
-useHead({ title: 'Sign in' })
+useHead({ title: 'Sign In' })
 
 const state = reactive({ email: '', password: '' })
 const loading = ref(false)
@@ -29,7 +29,7 @@ async function submit() {
   <UForm :state="state" class="space-y-4" @submit="submit">
     <div>
       <h1 class="text-lg font-semibold text-highlighted">
-        Sign in
+        Sign In
       </h1>
       <p class="text-sm text-muted">
         Use your household account.
@@ -43,11 +43,11 @@ async function submit() {
       <UInput v-model="state.password" type="password" autocomplete="current-password" class="w-full" />
     </UFormField>
     <UButton type="submit" block :loading="loading">
-      Sign in
+      Sign In
     </UButton>
     <div class="text-center">
       <ULink to="/forgot-password" class="text-sm text-muted hover:text-default">
-        Forgot your password?
+        Forgot Your Password?
       </ULink>
     </div>
   </UForm>

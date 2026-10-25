@@ -53,9 +53,9 @@ function setTab(t: string | number) {
 const counts = computed(() => tabCounts(bills.value, me.value))
 const tabItems = computed(() => [
   { label: 'All', value: 'all', badge: counts.value.all },
-  { label: `${myName.value} unpaid`, value: 'mine', badge: counts.value.mine },
-  { label: 'Card unpaid', value: 'card', badge: counts.value.card },
-  { label: 'Ready for card', value: 'ready', badge: counts.value.ready }
+  { label: `${myName.value} Unpaid`, value: 'mine', badge: counts.value.mine },
+  { label: 'Card Unpaid', value: 'card', badge: counts.value.card },
+  { label: 'Ready for Card', value: 'ready', badge: counts.value.ready }
 ].map(item => ({ ...item, badge: { label: String(item.badge), size: 'sm' as const, color: (tab.value === item.value ? 'primary' : 'neutral') as 'primary' | 'neutral', variant: 'soft' as const } })))
 
 // Amounts
@@ -80,9 +80,9 @@ const vsLastMonth = computed(() => {
 const stats = computed(() => {
   const list = hasSelection.value ? selectedBills.value : bills.value
   return [
-    { title: hasSelection.value ? 'Selected total' : 'Total this month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value, note: hasSelection.value ? '' : vsLastMonth.value },
-    { title: hasSelection.value ? `Selected unpaid for ${myName.value}` : `${myName.value} still owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value, note: hasSelection.value ? '' : users.value.filter(u => u.id !== me.value).map(u => `${u.name.split(' ')[0]} owes ${formatMoney(unpaidFor(list, u.id))}`).join(' · ') },
-    { title: 'Card unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, note: readyForCardCents(list) ? `${formatMoney(readyForCardCents(list))} ready to pay` : '' }
+    { title: hasSelection.value ? 'Selected Total' : 'Total This Month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value, note: hasSelection.value ? '' : vsLastMonth.value },
+    { title: hasSelection.value ? `Selected Unpaid for ${myName.value}` : `${myName.value} Still Owes`, icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value, note: hasSelection.value ? '' : users.value.filter(u => u.id !== me.value).map(u => `${u.name.split(' ')[0]} owes ${formatMoney(unpaidFor(list, u.id))}`).join(' · ') },
+    { title: 'Card Unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, note: readyForCardCents(list) ? `${formatMoney(readyForCardCents(list))} ready to pay` : '' }
   ]
 })
 
@@ -278,7 +278,7 @@ function openEdit(bill: Bill) {
         </div>
         <template v-if="tab === 'ready' && !hasSelection && readyIds.length">
           <UButton v-if="!confirmPayAll" size="sm" class="rounded-full px-4 ms-auto" icon="i-lucide-credit-card" @click="confirmPayAll = true">
-            Pay card for all {{ readyIds.length }} · {{ formatMoney(readyForCardCents(bills)) }}
+            Pay Card for All {{ readyIds.length }} · {{ formatMoney(readyForCardCents(bills)) }}
           </UButton>
           <template v-else>
             <span class="text-sm text-toned ms-auto">Mark {{ readyIds.length }} card payments paid?</span>
@@ -293,10 +293,10 @@ function openEdit(bill: Bill) {
         <template v-if="hasSelection">
           <span class="text-sm text-muted ms-auto">{{ selected.length }} selected</span>
           <UButton v-if="canPaySelectedMe" size="sm" variant="outline" class="rounded-full" :loading="busy === 'bulk:me'" @click="paySelected('me')">
-            Pay selected ({{ myName }})
+            Pay Selected ({{ myName }})
           </UButton>
           <UButton v-if="canPaySelectedCard" size="sm" variant="outline" class="rounded-full" :loading="busy === 'bulk:card'" @click="paySelected('card')">
-            Pay selected card
+            Pay Selected Card
           </UButton>
           <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="selected = []">
             Clear
@@ -407,7 +407,7 @@ function openEdit(bill: Bill) {
           Paid
         </UBadge>
         <UButton v-else-if="canMarkCardPaid(row.original)" size="sm" variant="outline" class="rounded-full px-4" :loading="busy === `card:${row.original.id}`" @click.stop="payCard(row.original)">
-          Pay card
+          Pay Card
         </UButton>
         <span v-else class="text-dimmed">—</span>
       </template>

@@ -125,8 +125,8 @@ function openEdit(item: Item) {
         </p>
       </div>
       <form class="flex flex-wrap items-center gap-3" autocomplete="off" @submit.prevent="create">
-        <UInput v-model="form.name" icon="i-lucide-receipt-text" placeholder="What for" aria-label="Name" class="w-56" />
-        <UInput v-model="form.owed" icon="i-lucide-dollar-sign" placeholder="Amount owed" aria-label="Amount owed" inputmode="decimal" class="w-40" />
+        <UInput v-model="form.name" icon="i-lucide-receipt-text" placeholder="What For" aria-label="Name" class="w-56" />
+        <UInput v-model="form.owed" icon="i-lucide-dollar-sign" placeholder="Amount Owed" aria-label="Amount Owed" inputmode="decimal" class="w-40" />
         <UButton type="submit" :loading="creating" icon="i-lucide-plus">
           New
         </UButton>

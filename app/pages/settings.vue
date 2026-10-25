@@ -77,7 +77,7 @@ const fmtDate = (d: string) => new Date(d).toLocaleString('en-US', { dateStyle: 
           <UInput v-model="profile.email" type="email" autocomplete="email" class="w-full" />
         </UFormField>
         <UButton type="submit" :loading="savingProfile">
-          Save profile
+          Save Profile
         </UButton>
       </form>
     </UCard>
@@ -89,17 +89,17 @@ const fmtDate = (d: string) => new Date(d).toLocaleString('en-US', { dateStyle: 
         </h2>
       </template>
       <form class="space-y-4" @submit.prevent="savePassword">
-        <UFormField label="Current password" required>
+        <UFormField label="Current Password" required>
           <UInput v-model="pw.currentPassword" type="password" autocomplete="current-password" class="w-full" />
         </UFormField>
-        <UFormField label="New password" required help="At least 12 characters with upper and lower case letters and a number.">
+        <UFormField label="New Password" required help="At least 12 characters with upper and lower case letters and a number.">
           <UInput v-model="pw.password" type="password" autocomplete="new-password" class="w-full" />
         </UFormField>
-        <UFormField label="Confirm new password" required>
+        <UFormField label="Confirm New Password" required>
           <UInput v-model="pw.confirm" type="password" autocomplete="new-password" class="w-full" />
         </UFormField>
         <UButton type="submit" :loading="savingPw">
-          Change password
+          Change Password
         </UButton>
       </form>
     </UCard>
@@ -107,7 +107,7 @@ const fmtDate = (d: string) => new Date(d).toLocaleString('en-US', { dateStyle: 
     <UCard>
       <template #header>
         <h2 class="font-semibold text-highlighted">
-          Card owner
+          Card Owner
         </h2>
         <p class="text-sm text-muted">
           Gets the "card ready to pay" email once everyone has paid a bill.
@@ -119,7 +119,7 @@ const fmtDate = (d: string) => new Date(d).toLocaleString('en-US', { dateStyle: 
     <UCard>
       <template #header>
         <h2 class="font-semibold text-highlighted">
-          Trusted devices
+          Trusted Devices
         </h2>
         <p class="text-sm text-muted">
           These skip the emailed sign-in code for 4 months after their last use.

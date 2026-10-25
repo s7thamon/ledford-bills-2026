@@ -52,7 +52,7 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
   [{ label: user.value?.name ?? '', type: 'label' }],
   [{ label: 'Settings', icon: 'i-lucide-settings', to: '/settings' }],
   [{
-    label: 'Sign out',
+    label: 'Sign Out',
     icon: 'i-lucide-log-out',
     onSelect: async () => {
       disconnect()
@@ -77,7 +77,7 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
 
       <template #right>
         <form class="hidden md:block" @submit.prevent="submitSearch">
-          <UInput ref="searchInput" v-model="search" icon="i-lucide-search" placeholder="Search bills" class="w-60" :ui="{ base: 'rounded-full' }" aria-label="Search bills">
+          <UInput ref="searchInput" v-model="search" icon="i-lucide-search" placeholder="Search Bills" class="w-60" :ui="{ base: 'rounded-full' }" aria-label="Search Bills">
             <template #trailing>
               <UKbd value="meta" />
               <UKbd value="k" />
@@ -117,7 +117,7 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
 
       <template #body>
         <form class="mb-4" @submit.prevent="submitSearch">
-          <UInput v-model="search" icon="i-lucide-search" placeholder="Search bills" class="w-full" aria-label="Search bills" />
+          <UInput v-model="search" icon="i-lucide-search" placeholder="Search Bills" class="w-full" aria-label="Search Bills" />
         </form>
         <UNavigationMenu :items="nav" orientation="vertical" class="-mx-2.5" />
       </template>

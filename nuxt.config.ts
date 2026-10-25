@@ -21,10 +21,14 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui', 'nuxt-auth-utils'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },
-  colorMode: { preference: 'light', fallback: 'light' },
+  colorMode: { preference: 'system', fallback: 'light' },
 
   app: {
-    head: { title: 'Ledford Bills' }
+    head: {
+      title: 'Ledford Bills',
+      titleTemplate: 'Bill - %s',
+      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]
+    }
   },
 
   runtimeConfig: {
