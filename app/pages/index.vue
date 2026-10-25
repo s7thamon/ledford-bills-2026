@@ -111,11 +111,14 @@ const rows = computed(() => bills.value.filter(b => billInTab(b, tab.value, me.v
 watch(() => rows.value, list => (selected.value = selected.value.filter(id => list.some(b => b.id === id))))
 const sortIcon = (key: SortKey) => sortBy.value !== key ? 'i-lucide-arrow-up-down' : sortDir.value === 'asc' ? 'i-lucide-arrow-up-narrow-wide' : 'i-lucide-arrow-down-wide-narrow'
 
+// Totals for whatever the active tab shows, e.g. exactly what Ready for Card will put on the card.
+const footerMoney = (cents: number) => rows.value.length ? h('span', { class: 'text-highlighted tabular-nums' }, formatMoney(cents)) : ''
+
 const columns = computed<TableColumn<Bill>[]>(() => [
   { accessorKey: 'addedOn', header: 'Added' },
-  { accessorKey: 'name', header: 'Name', meta: { class: { td: 'min-w-64' } } },
-  { accessorKey: 'amountCents', header: 'Amount', meta: { class: { th: 'text-right', td: 'text-right' } } },
-  { id: 'share', header: 'Each', meta: { class: { th: 'text-right', td: 'text-right' } } },
+  { accessorKey: 'name', header: 'Name', footer: () => rows.value.length ? `Total · ${rows.value.length} bill${rows.value.length === 1 ? '' : 's'}` : '', meta: { class: { td: 'min-w-64' } } },
+  { accessorKey: 'amountCents', header: 'Amount', footer: () => footerMoney(total(rows.value)), meta: { class: { th: 'text-right', td: 'text-right' } } },
+  { id: 'share', header: 'Each', footer: () => footerMoney(rows.value.reduce((sum, b) => sum + share(b), 0)), meta: { class: { th: 'text-right', td: 'text-right' } } },
   ...users.value.map(u => ({ id: `paid_${u.id}`, header: u.name.split(' ')[0], meta: { class: { th: 'text-center', td: 'text-center' } } })),
   { id: 'card', header: 'Card', meta: { class: { th: 'text-center', td: 'text-center' } } },
   { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { td: 'w-px' } } }
