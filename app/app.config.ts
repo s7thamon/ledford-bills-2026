@@ -27,6 +27,8 @@ export default defineAppConfig({
     table: {
       slots: {
         th: 'px-5 py-3 text-sm text-toned font-semibold bg-elevated/40',
+        // Subtle zebra striping, lighter than the header row.
+        tr: 'even:bg-elevated/20',
         td: 'px-5 py-3.5 text-sm text-default'
       }
     }

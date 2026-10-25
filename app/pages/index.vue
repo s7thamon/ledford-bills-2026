@@ -310,7 +310,7 @@ function openEdit(bill: Bill) {
       :loading="status === 'pending'"
       sticky
       :empty="tab === 'all' ? 'No bills for this month yet.' : 'Nothing here.'"
-      :meta="{ class: { tr: (row) => `cursor-pointer ${selected.includes(row.original.id) ? 'bg-primary/10' : ''}` } }"
+      :meta="{ class: { tr: (row) => `cursor-pointer ${selected.includes(row.original.id) ? 'bg-primary/10!' : ''}` } }"
       @select="(_e, row) => toggleSelected(row.original.id)"
     >
       <template #addedOn-header>

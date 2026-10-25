@@ -41,7 +41,7 @@ const isGrouped = (item: Item) => sameDay(item).length > 1
 // Same-day bills render as one tinted group: lighter dividers inside it, day number on the first row only.
 const rowClass = (item: Item) => [
   item.active ? '' : 'opacity-50',
-  isGrouped(item) ? 'bg-primary/5' : '',
+  isGrouped(item) ? 'bg-primary/5!' : '',
   isGrouped(item) && !isLast(item) ? 'border-b-primary/10' : ''
 ].join(' ')
 
