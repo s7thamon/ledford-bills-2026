@@ -9,6 +9,8 @@ const { user, session } = useUserSession()
 
 const month = computed(() => isMonth(route.query.month) ? route.query.month : currentMonth())
 // Old filter links (?userUnpaid=1 / ?cardUnpaid=1) still land on the matching tab.
+// Matches the 12 months the History menu offers.
+const canGoBack = computed(() => month.value > shiftMonth(currentMonth(), -12))
 const tab = computed<BillTab>(() => isBillTab(route.query.tab)
   ? route.query.tab
   : route.query.userUnpaid === '1' ? 'mine' : route.query.cardUnpaid === '1' ? 'card' : 'all')
@@ -180,7 +182,7 @@ function openEdit(bill: Bill) {
   <div class="space-y-8">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-1">
-        <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" aria-label="Previous month" :to="{ query: { month: shiftMonth(month, -1) } }" />
+        <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" aria-label="Previous month" :class="!canGoBack && 'invisible'" :disabled="!canGoBack" :to="{ query: { month: shiftMonth(month, -1) } }" />
         <h1 class="text-[1.625rem] font-semibold text-highlighted min-w-52 text-center">
           {{ monthLabel(month) }}
         </h1>
