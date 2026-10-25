@@ -58,7 +58,7 @@ const fmtDate = (d: string) => new Date(d).toLocaleString('en-US', { dateStyle: 
 </script>
 
 <template>
-  <div class="mx-auto max-w-2xl space-y-6">
+  <div class="mx-auto max-w-2xl space-y-8">
     <h1 class="text-2xl font-semibold text-highlighted">
       Settings
     </h1>

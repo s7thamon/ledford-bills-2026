@@ -21,13 +21,13 @@ const columns: TableColumn<Bill>[] = [
   { accessorKey: 'addedOn', header: 'Added' },
   { accessorKey: 'name', header: 'Name' },
   { accessorKey: 'amountCents', header: 'Amount', meta: { class: { th: 'text-right', td: 'text-right' } } },
-  { id: 'share', header: 'Each/Split', meta: { class: { th: 'text-right', td: 'text-right' } } },
+  { id: 'share', header: 'Each', meta: { class: { th: 'text-right', td: 'text-right' } } },
   { id: 'status', header: 'Status', meta: { class: { th: 'text-center', td: 'text-center' } } }
 ]
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-8">
     <div>
       <h1 class="text-2xl font-semibold text-highlighted">
         {{ q ? `Results for "${q}"` : 'Search bills' }}
@@ -40,7 +40,7 @@ const columns: TableColumn<Bill>[] = [
       </p>
     </div>
 
-    <div v-if="chartData.length > 1" class="rounded-lg bg-elevated/60 p-4">
+    <div v-if="chartData.length > 1" class="surface-card p-5">
       <UChart
         type="line"
         :data="chartData"
@@ -54,32 +54,37 @@ const columns: TableColumn<Bill>[] = [
       />
     </div>
 
-    <UTable v-if="q" :data="results" :columns="columns" :loading="status === 'pending'" empty="No bills match.">
-      <template #addedOn-cell="{ row }">
-        <NuxtLink :to="{ path: '/', query: { month: row.original.addedOn.slice(0, 7) } }" class="tabular-nums text-muted hover:text-primary">
-          {{ dotDate(row.original.addedOn) }}
-        </NuxtLink>
-      </template>
-      <template #amountCents-cell="{ row }">
-        <span class="tabular-nums">{{ formatMoney(row.original.amountCents) }}</span>
-      </template>
-      <template #share-cell="{ row }">
-        <span class="inline-flex items-center gap-1 tabular-nums">
-          <UIcon v-if="isCustomSplit(row.original.participants.map(p => p.amountCents))" name="i-lucide-arrow-left-right" class="size-3.5 text-muted" />
-          {{ formatMoney(share(row.original)) }}
-        </span>
-      </template>
-      <template #status-cell="{ row }">
-        <UBadge v-if="row.original.cardPaidAt" color="primary" variant="soft" class="rounded-full">
-          Settled
-        </UBadge>
-        <UBadge v-else-if="allParticipantsPaid(row.original)" color="info" variant="soft" class="rounded-full">
-          Card due
-        </UBadge>
-        <UBadge v-else color="warning" variant="soft" class="rounded-full">
-          Unpaid
-        </UBadge>
-      </template>
-    </UTable>
+    <div v-if="q" class="surface-card overflow-hidden">
+      <UTable :data="results" :columns="columns" :loading="status === 'pending'" empty="No bills match.">
+        <template #addedOn-cell="{ row }">
+          <NuxtLink :to="{ path: '/', query: { month: row.original.addedOn.slice(0, 7) } }" class="tabular-nums text-muted hover:text-primary">
+            {{ dotDate(row.original.addedOn) }}
+          </NuxtLink>
+        </template>
+        <template #name-cell="{ row }">
+          <span class="font-semibold text-highlighted">{{ row.original.name }}</span>
+        </template>
+        <template #amountCents-cell="{ row }">
+          <span class="tabular-nums">{{ formatMoney(row.original.amountCents) }}</span>
+        </template>
+        <template #share-cell="{ row }">
+          <span class="inline-flex items-center gap-1 tabular-nums">
+            <UIcon v-if="isCustomSplit(row.original.participants.map(p => p.amountCents))" name="i-lucide-arrow-left-right" class="size-3.5 text-muted" />
+            {{ formatMoney(share(row.original)) }}
+          </span>
+        </template>
+        <template #status-cell="{ row }">
+          <UBadge v-if="row.original.cardPaidAt" color="success" variant="soft" size="md" icon="i-lucide-check">
+            Settled
+          </UBadge>
+          <UBadge v-else-if="allParticipantsPaid(row.original)" color="primary" variant="soft" size="md">
+            Card due
+          </UBadge>
+          <UBadge v-else color="warning" variant="soft" size="md">
+            Unpaid
+          </UBadge>
+        </template>
+      </UTable>
+    </div>
   </div>
 </template>

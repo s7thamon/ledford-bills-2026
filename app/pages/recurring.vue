@@ -68,7 +68,7 @@ function openEdit(item: Item) {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-8">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold text-highlighted">
@@ -91,38 +91,43 @@ function openEdit(item: Item) {
       </form>
     </div>
 
-    <UTable :data="items" :columns="columns" :loading="status === 'pending'" sticky empty="No recurring bills yet." :meta="{ class: { tr: (row) => row.original.active ? '' : 'opacity-50' } }">
-      <template #dayOfMonth-cell="{ row }">
-        <span class="tabular-nums text-muted">{{ row.original.dayOfMonth }}</span>
-      </template>
-      <template #type-cell="{ row }">
-        <UBadge :color="row.original.type === 'bill' ? 'primary' : 'warning'" variant="soft" class="rounded-full capitalize">
-          {{ row.original.type }}
-        </UBadge>
-      </template>
-      <template #amountCents-cell="{ row }">
-        <span class="tabular-nums">{{ formatMoney(row.original.amountCents) }}</span>
-      </template>
-      <template #split-cell="{ row }">
-        <span v-if="row.original.type === 'reimbursement'" class="text-sm">{{ userName(row.original.otherUserId) }} owes</span>
-        <span v-else class="inline-flex items-center gap-1 text-sm tabular-nums">
-          <UIcon v-if="isCustomSplit(row.original.participants.map(p => p.amountCents))" name="i-lucide-arrow-left-right" class="size-3.5 text-muted" />
-          {{ row.original.participants.map(p => `${userName(p.userId)} ${formatMoney(p.amountCents)}`).join(' · ') }}
-        </span>
-      </template>
-      <template #active-cell="{ row }">
-        <USwitch :model-value="row.original.active" :aria-label="`Active: ${row.original.name}`" @update:model-value="v => setActive(row.original, v)" />
-      </template>
-      <template #order-cell="{ row }">
-        <div class="inline-flex">
-          <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="ghost" :disabled="isFirst(row.original)" aria-label="Move up" @click="move(row.original, -1)" />
-          <UButton icon="i-lucide-chevron-down" size="xs" color="neutral" variant="ghost" :disabled="isLast(row.original)" aria-label="Move down" @click="move(row.original, 1)" />
-        </div>
-      </template>
-      <template #actions-cell="{ row }">
-        <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit" @click="openEdit(row.original)" />
-      </template>
-    </UTable>
+    <div class="surface-card overflow-hidden">
+      <UTable :data="items" :columns="columns" :loading="status === 'pending'" sticky empty="No recurring bills yet." :meta="{ class: { tr: (row) => row.original.active ? '' : 'opacity-50' } }">
+        <template #name-cell="{ row }">
+          <span class="font-semibold text-highlighted">{{ row.original.name }}</span>
+        </template>
+        <template #dayOfMonth-cell="{ row }">
+          <span class="tabular-nums text-toned">{{ row.original.dayOfMonth }}</span>
+        </template>
+        <template #type-cell="{ row }">
+          <UBadge :color="row.original.type === 'bill' ? 'primary' : 'warning'" variant="soft" class="rounded-full capitalize">
+            {{ row.original.type }}
+          </UBadge>
+        </template>
+        <template #amountCents-cell="{ row }">
+          <span class="tabular-nums">{{ formatMoney(row.original.amountCents) }}</span>
+        </template>
+        <template #split-cell="{ row }">
+          <span v-if="row.original.type === 'reimbursement'" class="text-sm">{{ userName(row.original.otherUserId) }} owes</span>
+          <span v-else class="inline-flex items-center gap-1 text-sm tabular-nums">
+            <UIcon v-if="isCustomSplit(row.original.participants.map(p => p.amountCents))" name="i-lucide-arrow-left-right" class="size-3.5 text-muted" />
+            {{ row.original.participants.map(p => `${userName(p.userId)} ${formatMoney(p.amountCents)}`).join(' · ') }}
+          </span>
+        </template>
+        <template #active-cell="{ row }">
+          <USwitch :model-value="row.original.active" :aria-label="`Active: ${row.original.name}`" @update:model-value="v => setActive(row.original, v)" />
+        </template>
+        <template #order-cell="{ row }">
+          <div class="inline-flex">
+            <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="ghost" :disabled="isFirst(row.original)" aria-label="Move up" @click="move(row.original, -1)" />
+            <UButton icon="i-lucide-chevron-down" size="xs" color="neutral" variant="ghost" :disabled="isLast(row.original)" aria-label="Move down" @click="move(row.original, 1)" />
+          </div>
+        </template>
+        <template #actions-cell="{ row }">
+          <UButton icon="i-lucide-ellipsis" color="neutral" variant="ghost" size="sm" aria-label="Edit" @click="openEdit(row.original)" />
+        </template>
+      </UTable>
+    </div>
 
     <RecurringEditModal v-model:open="editOpen" :item="editing" :users="users" @changed="refresh" />
   </div>
