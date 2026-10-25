@@ -8,7 +8,7 @@ interface Bill {
   refunds: { amountCents: number }[]
 }
 
-const props = defineProps<{ bill: Bill | null, users: { id: number, name: string }[] }>()
+const props = defineProps<{ bill: Bill | null, users: { id: number, name: string }[], initialAmountCents?: number, initialDate?: string }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ changed: [] }>()
 const run = useApi()
@@ -26,8 +26,8 @@ const firstName = (id: number) => props.users.find(u => u.id === id)?.name.split
 watch(open, (isOpen) => {
   if (!isOpen) return
   // Start empty so a partial return is never saved as a full refund by accident.
-  amount.value = ''
-  refundedOn.value = todayIso()
+  amount.value = props.initialAmountCents ? moneyNumber(props.initialAmountCents) : ''
+  refundedOn.value = props.initialDate ?? todayIso()
 })
 
 async function save() {

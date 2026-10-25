@@ -18,7 +18,8 @@ const nav = computed<NavigationMenuItem[]>(() => [
     children: historyMonths.map(m => ({ label: monthLabel(m), to: { path: '/', query: { month: m } } }))
   },
   { label: 'Recurring', icon: 'i-lucide-repeat', to: '/recurring' },
-  { label: 'Reimbursements', icon: 'i-lucide-arrow-left-right', to: '/reimbursements' }
+  { label: 'Reimbursements', icon: 'i-lucide-arrow-left-right', to: '/reimbursements' },
+  { label: 'Reconcile', icon: 'i-lucide-scale', to: '/reconcile' }
 ])
 
 const colorMode = useColorMode()
