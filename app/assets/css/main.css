@@ -2,7 +2,7 @@
 @import "@nuxt/ui";
 
 @theme static {
-  --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
 
   /* One pixel up from Tailwind's defaults; Nuxt UI components inherit these. */
   --text-xs: 0.8125rem;

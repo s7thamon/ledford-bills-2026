@@ -26,7 +26,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'Ledford Bills',
-      titleTemplate: 'Bill - %s',
+      titleTemplate: 'Bills - %s',
       link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]
     }
   },
