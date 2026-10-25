@@ -3,7 +3,7 @@ import { createError } from 'h3'
 import { schema, useDb } from '../db/client'
 import { todayIso, monthRange } from '../../shared/utils/dates'
 import { splitAmounts } from '../../shared/utils/split'
-import { allParticipantsPaid, canDeleteBill, canEditBill, canMarkCardPaid, canMarkParticipantPaid } from '../../shared/utils/rules'
+import { allParticipantsPaid, canDeleteBill, canEditAmounts, canMarkCardPaid, canMarkParticipantPaid } from '../../shared/utils/rules'
 import * as notify from './notify'
 
 const { bills, billParticipants, refunds, users } = schema
@@ -185,7 +185,7 @@ export async function createBill(input: {
 /** Changing only the amount resets to an equal split; passing splits sets them explicitly. */
 export async function updateBill(id: number, input: { name?: string, amountCents?: number, splits?: Record<number, number> }): Promise<BillDto> {
   const bill = await getBill(id)
-  if (!canEditBill(bill)) {
+  if (!canEditAmounts(bill)) {
     throw createError({ statusCode: 409, statusMessage: 'This bill already has payments, so it can no longer be edited.' })
   }
   const db = useDb()
@@ -206,6 +206,8 @@ export async function updateBill(id: number, input: { name?: string, amountCents
     // A credit was sized for the old amounts; send it back to unused rather than leave it stale.
     if (bill.credit && amountsChange) {
       await tx.update(refunds).set({ appliedToBillId: null, appliedAt: null }).where(eq(refunds.appliedToBillId, id))
+      // Shares were only "paid" because the credit covered them.
+      await tx.update(billParticipants).set({ paidAt: null }).where(eq(billParticipants.billId, id))
     }
     const patch: Partial<typeof bills.$inferInsert> = {}
     if (input.name !== undefined) patch.name = input.name.trim()
@@ -291,14 +293,18 @@ export async function countUnpaidInMonth(month: string): Promise<number> {
     .from(bills)
     .where(and(
       between(bills.addedOn, start, end),
-      sql`(${bills.cardPaidAt} is null or exists (select 1 from bill_participants bp where bp.bill_id = ${bills.id} and bp.paid_at is null))`
+      sql`((${bills.cardPaidAt} is null and ${bills.paidWithCardOf} is null) or exists (select 1 from bill_participants bp where bp.bill_id = ${bills.id} and bp.paid_at is null))`
     ))
   return row?.n ?? 0
 }
 
 /** Mark the purchase as made on someone's personal card (or clear it with null). */
 export async function setPaidWithCard(billId: number, userId: number | null): Promise<BillDto> {
-  await getBill(billId)
+  const bill = await getBill(billId)
+  // Refunds and credits live on the shared card; switching cards afterwards would leave Citi underpaid.
+  if (bill.cardPaidAt || bill.credit || bill.refunds.length) {
+    throw createError({ statusCode: 409, statusMessage: 'This bill already has a card payment, refund or credit, so its card can no longer change.' })
+  }
   if (userId !== null && !(await householdIds()).includes(userId)) {
     throw createError({ statusCode: 422, statusMessage: 'Pick someone in the household.' })
   }

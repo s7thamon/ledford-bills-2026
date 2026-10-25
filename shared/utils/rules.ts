@@ -1,4 +1,4 @@
-import type { CreditLike } from './credits'
+import { shareDue, type CreditLike } from './credits'
 
 export interface ParticipantLike { userId: number, amountCents: number, paidAt: string | Date | null }
 export interface BillLike {
@@ -18,6 +18,9 @@ export interface ReimbursementLike {
 }
 
 export const canEditBill = (bill: BillLike) => bill.participants.every(p => !p.paidAt)
+/** Editable, or only "paid" because a refund credit covered those shares (editing then returns the credit). */
+export const canEditAmounts = (bill: BillLike) => canEditBill(bill)
+  || (!!bill.credit && !bill.cardPaidAt && bill.participants.every(p => !p.paidAt || shareDue(p, bill.credit) === 0))
 export const canDeleteBill = (bill: BillLike) => canEditBill(bill) && !bill.cardPaidAt
 export const allParticipantsPaid = (bill: BillLike) => bill.participants.length > 0 && bill.participants.every(p => p.paidAt)
 export const canMarkCardPaid = (bill: BillLike) => !bill.cardPaidAt && !bill.paidWithCardOf && allParticipantsPaid(bill)

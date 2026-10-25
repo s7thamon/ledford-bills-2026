@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createBill, deleteBill, getBill, markCardPaid, markParticipantPaid, setPaidWithCard, updateBill } from '../server/services/bills'
+import { countUnpaidInMonth, createBill, deleteBill, getBill, markCardPaid, markParticipantPaid, setPaidWithCard, updateBill } from '../server/services/bills'
 import { applyRefund, deleteRefund, listRefunds, recordRefund, unapplyRefund } from '../server/services/refunds'
 import { sentMail } from '../server/utils/mail'
 import { canMarkCardPaid } from '../shared/utils/rules'
@@ -104,6 +104,23 @@ describe('refunds', () => {
     expect(renamed.credit?.refundId).toBe(refund.id)
   })
 
+  it('a bill whose shares the credit covered can still be edited, returning the credit', async () => {
+    const rug = await paidBill('Costco Rug', 30000)
+    const refund = await recordRefund(rug.id, { amountCents: 30000, refundedOn: '2026-11-02' }, tim)
+    const same = await createBill({ name: 'Same price', amountCents: 30000, createdBy: tim })
+    await applyRefund(refund.id, same.id)
+    const edited = await updateBill(same.id, { amountCents: 50000 })
+    expect(edited.credit).toBeNull()
+    expect(edited.participants.every(p => !p.paidAt)).toBe(true)
+    expect((await listRefunds())[0]!.appliedToBillId).toBeNull()
+  })
+
+  it('paid-with cannot change once a bill has refunds or a credit', async () => {
+    const rug = await paidBill('Costco Rug', 30000, false)
+    await recordRefund(rug.id, { amountCents: 10000, refundedOn: '2026-11-02' }, tim)
+    await expectHttpError(setPaidWithCard(rug.id, kelly), 409)
+  })
+
   it('delete returns credit', async () => {
     const rug = await paidBill('Costco Rug', 30000)
     const refund = await recordRefund(rug.id, { amountCents: 30000, refundedOn: '2026-11-02' }, tim)
@@ -155,6 +172,14 @@ describe('refunds', () => {
     const cleared = await setPaidWithCard(bill.id, null)
     expect(canMarkCardPaid(cleared)).toBe(true)
     await expectHttpError(setPaidWithCard(bill.id, 999), 422)
+  })
+
+  it('a paid different-card bill does not count as unpaid for the reminder', async () => {
+    const bill = await createBill({ name: 'Personal', amountCents: 1000, createdBy: tim, addedOn: '2026-09-05' })
+    await setPaidWithCard(bill.id, tim)
+    await markParticipantPaid(bill.id, tim, tim, false)
+    await markParticipantPaid(bill.id, kelly, kelly, false)
+    expect(await countUnpaidInMonth('2026-09')).toBe(0)
   })
 
   it('cannot apply a credit to a different-card bill', async () => {

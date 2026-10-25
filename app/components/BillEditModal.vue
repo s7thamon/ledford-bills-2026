@@ -22,7 +22,7 @@ const splits = ref<Record<number, string>>({})
 const saving = ref(false)
 const confirmDelete = ref(false)
 
-const editable = computed(() => !!props.bill && canEditBill(props.bill))
+const editable = computed(() => !!props.bill && canEditAmounts(props.bill))
 const deletable = computed(() => !!props.bill && canDeleteBill(props.bill))
 const totalCents = computed(() => parseAmount(amount.value))
 const refundOpen = ref(false)
@@ -89,7 +89,7 @@ async function remove() {
         </UFormField>
         <SplitFields v-model="splits" :users="users" :total-cents="totalCents" :disabled="!editable" />
         <UFormField label="Paid With" help="Pick a personal card if this was not charged to the shared Citi card.">
-          <USelect :model-value="bill?.paidWithCardOf ?? 0" :items="cardItems" class="w-full" :disabled="!bill || !!bill.cardPaidAt || !!bill.credit" @update:model-value="v => setCard(Number(v))" />
+          <USelect :model-value="bill?.paidWithCardOf ?? 0" :items="cardItems" class="w-full" :disabled="!bill || !!bill.cardPaidAt || !!bill.credit || bill.refunds.length > 0" @update:model-value="v => setCard(Number(v))" />
         </UFormField>
         <UAlert
           v-if="bill?.credit && amountsChanged"
