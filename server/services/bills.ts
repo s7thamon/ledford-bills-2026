@@ -1,9 +1,11 @@
-import { and, asc, between, count, desc, eq, gt, inArray, isNull, like, sql } from 'drizzle-orm'
+import { and, asc, between, count, desc, eq, gt, inArray, isNull, like, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import { schema, useDb } from '../db/client'
 import { todayIso, monthRange } from '../../shared/utils/dates'
 import { splitAmounts } from '../../shared/utils/split'
 import { allParticipantsPaid, canDeleteBill, canEditAmounts, canMarkCardPaid, canMarkParticipantPaid } from '../../shared/utils/rules'
+import { cardDue } from '../../shared/utils/credits'
+import type { ReconcileBill, ReconcileRefund } from '../../shared/utils/reconcile'
 import * as notify from './notify'
 
 const { bills, billParticipants, refunds, users } = schema
@@ -310,4 +312,38 @@ export async function setPaidWithCard(billId: number, userId: number | null): Pr
   }
   await useDb().update(bills).set({ paidWithCardOf: userId }).where(eq(bills.id, billId))
   return getBill(billId)
+}
+
+/** Shared-card bills and refunds a Citi statement covering from..to could mention (±5 days). */
+export async function listForReconcile(from: string, to: string): Promise<{ bills: ReconcileBill[], refunds: ReconcileRefund[] }> {
+  const start = shiftDate(from, -5)
+  const end = shiftDate(to, 5)
+  const rows = await useDb().query.bills.findMany({
+    where: and(
+      isNull(bills.paidWithCardOf),
+      or(between(bills.addedOn, start, end), between(bills.cardPaidAt, new Date(`${start}T00:00:00Z`), new Date(`${end}T23:59:59Z`)))
+    ),
+    columns: billColumns,
+    with: withParticipants,
+    orderBy: [asc(bills.addedOn), asc(bills.id)]
+  })
+  const refundRows = await useDb().select({ id: refunds.id, billId: refunds.billId, amountCents: refunds.amountCents, refundedOn: refunds.refundedOn })
+    .from(refunds).where(between(refunds.refundedOn, start, end)).orderBy(asc(refunds.refundedOn), asc(refunds.id))
+  return {
+    bills: rows.map(toDto).map(b => ({
+      id: b.id,
+      name: b.name,
+      amountCents: b.amountCents,
+      addedOn: b.addedOn,
+      cardPaidAt: b.cardPaidAt ? b.cardPaidAt.toISOString() : null,
+      cardDueCents: cardDue(b)
+    })),
+    refunds: refundRows
+  }
+}
+
+function shiftDate(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
 }

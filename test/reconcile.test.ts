@@ -86,3 +86,52 @@ describe('matchPayments', () => {
     expect(matchPayments([line('p', -1000, '2026-09-09', 'ONLINE PAYMENT', 'payment')], [bill(1, 1000, '2026-09-08')]).exact).toEqual([])
   })
 })
+
+describe('listForReconcile', async () => {
+  const { beforeEach } = await import('vitest')
+  const { createBill, markCardPaid, markParticipantPaid, setPaidWithCard, listForReconcile } = await import('../server/services/bills')
+  const { applyRefund, recordRefund } = await import('../server/services/refunds')
+  const { resetDb, seedUsers } = await import('./helpers')
+  let tim: number, kelly: number
+  beforeEach(async () => {
+    await resetDb()
+    ;({ tim, kelly } = await seedUsers())
+  })
+  const payBoth = async (id: number) => {
+    await markParticipantPaid(id, tim, tim, false)
+    await markParticipantPaid(id, kelly, kelly, false)
+  }
+
+  it('returns shared-card bills and refunds for the range', async () => {
+    const inside = await createBill({ name: 'Inside', amountCents: 1000, createdBy: tim, addedOn: '2026-09-10' })
+    const before = await createBill({ name: 'Paid later', amountCents: 2000, createdBy: tim, addedOn: '2026-07-01' })
+    await payBoth(before.id)
+    await markCardPaid(before.id)
+    // Card paid inside the statement range even though the bill was added months earlier.
+    const { useDb, schema } = await import('../server/db/client')
+    const { eq } = await import('drizzle-orm')
+    await useDb().update(schema.bills).set({ cardPaidAt: new Date('2026-09-12T12:00:00Z') }).where(eq(schema.bills.id, before.id))
+    const personal = await createBill({ name: 'Personal', amountCents: 3000, createdBy: tim, addedOn: '2026-09-11' })
+    await setPaidWithCard(personal.id, tim)
+    await createBill({ name: 'Far away', amountCents: 4000, createdBy: tim, addedOn: '2026-05-01' })
+    const { bills } = await listForReconcile('2026-08-01', '2026-09-20')
+    expect(bills.map(b => b.name).sort()).toEqual(['Inside', 'Paid later'])
+    expect(bills.find(b => b.id === inside.id)).toMatchObject({ amountCents: 1000, cardDueCents: 1000, cardPaidAt: null })
+  })
+
+  it('reports the reduced card amount and refunds in range', async () => {
+    const rug = await createBill({ name: 'Rug', amountCents: 30000, createdBy: tim, addedOn: '2026-09-01' })
+    await payBoth(rug.id)
+    await markCardPaid(rug.id)
+    const refund = await recordRefund(rug.id, { amountCents: 30000, refundedOn: '2026-09-05' }, tim)
+    const rep = await createBill({ name: 'Replacement', amountCents: 32000, createdBy: tim, addedOn: '2026-09-06' })
+    await applyRefund(refund.id, rep.id)
+    const r = await listForReconcile('2026-09-01', '2026-09-20')
+    expect(r.bills.find(b => b.id === rep.id)!.cardDueCents).toBe(2000)
+    expect(r.refunds).toEqual([{ id: refund.id, billId: rug.id, amountCents: 30000, refundedOn: '2026-09-05' }])
+  })
+
+  it('creates bills on a given date', async () => {
+    expect((await createBill({ name: 'Dated', amountCents: 500, createdBy: tim, addedOn: '2026-09-03' })).addedOn).toBe('2026-09-03')
+  })
+})
