@@ -27,7 +27,8 @@ const { data: other, refresh: refreshOther } = await useFetch('/api/reimbursemen
   query: computed(() => ({ resolved: !resolved.value, page: 1 })),
   default: () => ({ items: [], total: 0, pageSize: 10 })
 })
-const refreshAll = () => Promise.all([refresh(), refreshOther()])
+// Live updates only refresh the 'reimbursements' key, so follow the active list to keep this count current.
+watch(data, () => refreshOther())
 const tabItems = computed(() => [
   { label: 'Open', value: 'open', badge: resolved.value ? other.value.total : data.value.total },
   // The API's resolved=true includes completed items alongside open ones, so this tab is "All".
@@ -83,7 +84,7 @@ async function create() {
   creating.value = false
   if (!ok) return
   Object.assign(form, { name: '', owed: '' })
-  await refreshAll()
+  await refresh()
 }
 
 const busy = ref<string | null>(null)
@@ -91,7 +92,7 @@ async function act(key: string, url: string, success: string) {
   busy.value = key
   const ok = await run(() => $fetch(url, { method: 'POST' }), success)
   busy.value = null
-  if (ok) await refreshAll()
+  if (ok) await refresh()
 }
 
 const columns: TableColumn<Item>[] = [
@@ -214,6 +215,6 @@ function openEdit(item: Item) {
       <UPagination v-model:page="page" :total="data.total" :items-per-page="data.pageSize" />
     </div>
 
-    <ReimbursementEditModal v-model:open="editOpen" :item="editing" @changed="refreshAll" />
+    <ReimbursementEditModal v-model:open="editOpen" :item="editing" @changed="refresh" />
   </div>
 </template>
