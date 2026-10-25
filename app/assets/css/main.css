@@ -8,6 +8,8 @@
 :root {
   /* Inputs/buttons use radius-md (1.5x), so this lands them around 11px. */
   --ui-radius: 0.45rem;
+  /* Nuxt UI default is 80rem; ~10% wider for breathing room. */
+  --ui-container: 88rem;
   --app-card-shadow: 0 1px 2px rgb(15 26 30 / 0.04), 0 8px 24px -12px rgb(15 26 30 / 0.08);
 }
 
