@@ -22,7 +22,11 @@ export default defineAppConfig({
     badge: {
       slots: {
         base: 'rounded-full'
-      }
+      },
+      compoundVariants: [
+        // Default yellow-on-pale-yellow fails contrast in light mode.
+        { color: 'warning', variant: 'soft', class: 'text-(--ui-color-warning-700) dark:text-warning' }
+      ]
     },
     table: {
       slots: {
