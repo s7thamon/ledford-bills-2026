@@ -87,7 +87,7 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
         <!-- The saved preference lives in localStorage, so the server can't render the right icon. -->
         <ClientOnly>
           <UDropdownMenu :items="themeMenu" :content="{ align: 'end' }">
-            <UButton :icon="themeIcon" color="neutral" variant="ghost" class="rounded-full" aria-label="Theme" />
+            <UButton :icon="themeIcon" color="neutral" variant="ghost" class="rounded-full" :aria-label="`Theme: ${colorMode.preference}`" />
           </UDropdownMenu>
           <template #fallback>
             <div class="size-9" />
@@ -105,7 +105,7 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
           />
         </UTooltip>
         <UDropdownMenu :items="userMenu" :content="{ align: 'end' }">
-          <UButton color="neutral" variant="ghost" class="rounded-full p-1" aria-label="User menu">
+          <UButton color="neutral" variant="ghost" class="rounded-full p-1" :aria-label="`User menu, ${connected ? 'live updates on' : 'reconnecting'}`">
             <UTooltip :text="connected ? 'Live updates on' : 'Reconnecting…'">
               <UChip :color="connected ? 'success' : 'warning'" position="bottom-right" inset>
                 <UAvatar :text="initials" size="sm" class="bg-primary/10 text-primary font-semibold" />

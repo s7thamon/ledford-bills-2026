@@ -8,7 +8,10 @@ const toast = useToast()
 const { user, session } = useUserSession()
 
 const month = computed(() => isMonth(route.query.month) ? route.query.month : currentMonth())
-const tab = computed<BillTab>(() => isBillTab(route.query.tab) ? route.query.tab : 'all')
+// Old filter links (?userUnpaid=1 / ?cardUnpaid=1) still land on the matching tab.
+const tab = computed<BillTab>(() => isBillTab(route.query.tab)
+  ? route.query.tab
+  : route.query.userUnpaid === '1' ? 'mine' : route.query.cardUnpaid === '1' ? 'card' : 'all')
 useHead({ title: () => monthLabel(month.value) })
 
 const me = computed(() => user.value!.id)
@@ -35,7 +38,7 @@ function toggleSelected(id: number) {
 }
 
 function setTab(t: string | number) {
-  router.replace({ query: { ...route.query, tab: t === 'all' ? undefined : String(t) } })
+  router.replace({ query: { ...route.query, userUnpaid: undefined, cardUnpaid: undefined, tab: t === 'all' ? undefined : String(t) } })
 }
 const counts = computed(() => tabCounts(bills.value, me.value))
 const tabItems = computed(() => [
