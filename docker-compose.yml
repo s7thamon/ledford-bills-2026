@@ -1,0 +1,38 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "38417:3000"
+    environment:
+      DATABASE_URL: mysql://ledford:${MYSQL_PASSWORD}@db:3306/ledford_bills
+      NUXT_SESSION_PASSWORD: ${NUXT_SESSION_PASSWORD}
+      APP_URL: ${APP_URL}
+      TZ: America/New_York
+      MAIL_URL: ${MAIL_URL}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ledford_bills
+      MYSQL_USER: ledford
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: America/New_York
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  mysql-data:

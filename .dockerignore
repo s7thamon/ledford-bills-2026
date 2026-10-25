@@ -1,0 +1,15 @@
+node_modules
+.nuxt
+.output
+.data
+.nitro
+.cache
+.git
+.env
+.env.*
+!.env.example
+ledford-bills-flux_old
+.playwright-mcp
+.superpowers
+test
+*.log
