@@ -69,3 +69,18 @@ body {
     background: linear-gradient(135deg, color-mix(in oklab, var(--ui-color-primary-500) 22%, transparent), color-mix(in oklab, var(--ui-color-primary-500) 8%, transparent));
   }
 }
+
+/* Read-only fields: filled and muted so they read as locked at a glance, not just faded.
+   Unlayered on purpose so it beats Nuxt UI's bg utility on the outline variant. */
+input[data-slot='base']:disabled,
+textarea[data-slot='base']:disabled,
+button[role='combobox'][data-slot='base']:disabled {
+  background-color: var(--ui-bg-elevated);
+  color: var(--ui-text-muted);
+  opacity: 1;
+}
+
+/* Disabled buttons (e.g. Save on a read-only bill) should not look clickable. */
+button[data-slot='base']:disabled {
+  opacity: 0.45;
+}
