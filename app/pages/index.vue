@@ -324,7 +324,7 @@ function openEdit(bill: Bill) {
       </template>
 
       <template #addedOn-cell="{ row }">
-        <span class="tabular-nums text-toned">{{ dotDate(row.original.addedOn) }}</span>
+        <span class="tabular-nums text-toned">{{ shortDate(row.original.addedOn) }}</span>
       </template>
 
       <template #name-cell="{ row }">

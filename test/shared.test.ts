@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatMoney, moneyNumber, parseAmount } from '../shared/utils/money'
 import { equalShare, isCustomSplit, splitAmounts } from '../shared/utils/split'
-import { daysInMonth, monthRange, shiftMonth, todayIso } from '../shared/utils/dates'
+import { daysInMonth, monthRange, shiftMonth, shortDate, todayIso } from '../shared/utils/dates'
 import { canDeleteBill, canEditBill, canMarkCardPaid, canMarkTransferComplete, canMarkReimbursementComplete, reimbursementStatus } from '../shared/utils/rules'
 import { billInTab, filterSuggestions, isBillTab, readyForCardCents, tabCounts } from '../shared/utils/bill-view'
 
@@ -104,5 +104,13 @@ describe('bill view', () => {
     expect(filterSuggestions(names, '')).toEqual(names)
     expect(filterSuggestions(Array.from({ length: 15 }, (_, i) => `n${i}`), 'n')).toHaveLength(10)
     expect(filterSuggestions(names, 'zzz')).toEqual([])
+  })
+})
+
+describe('shortDate', () => {
+  it('formats an ISO date as month and day', () => {
+    expect(shortDate('2026-10-24')).toBe('Oct 24')
+    expect(shortDate('2026-01-05')).toBe('Jan 5')
+    expect(shortDate('2026-12-31T23:00:00')).toBe('Dec 31')
   })
 })
