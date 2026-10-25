@@ -44,6 +44,16 @@ async function setCardOwner(userId: number) {
   if (await run(() => $fetch('/api/settings/card-owner', { method: 'PUT', body: { userId } }), 'Card owner updated')) await refreshUsers()
 }
 
+// Paid directly
+const { data: directPay } = await useFetch('/api/settings/direct-pay', { default: () => [] as string[] })
+const savingDirectPay = ref(false)
+async function saveDirectPay() {
+  savingDirectPay.value = true
+  const saved = await run(() => $fetch('/api/settings/direct-pay', { method: 'PUT', body: { names: directPay.value } }), 'Paid directly list saved')
+  savingDirectPay.value = false
+  if (saved) directPay.value = saved
+}
+
 // Devices
 async function revoke(id: number) {
   if (await run(() => $fetch(`/api/settings/devices/${id}`, { method: 'DELETE' }), 'Device signed out')) await refreshDevices()
@@ -114,6 +124,23 @@ const fmtDate = (d: string) => new Date(d).toLocaleString('en-US', { dateStyle: 
         </p>
       </template>
       <USelect :model-value="cardOwnerId" :items="userItems" placeholder="Nobody" class="w-64" @update:model-value="v => setCardOwner(Number(v))" />
+    </UCard>
+
+    <UCard>
+      <template #header>
+        <h2 class="font-semibold text-highlighted">
+          Paid Directly
+        </h2>
+        <p class="text-sm text-muted">
+          Bills with these exact names are paid straight to the bank, so Reconcile never expects them on the Citi statement.
+        </p>
+      </template>
+      <form class="space-y-4" @submit.prevent="saveDirectPay">
+        <UInputTags v-model="directPay" placeholder="Add a bill name, then press Enter" aria-label="Bill names paid directly" class="w-full" />
+        <UButton type="submit" :loading="savingDirectPay">
+          Save
+        </UButton>
+      </form>
     </UCard>
 
     <UCard>

@@ -277,7 +277,7 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
     <div v-if="!fileName" class="surface-card p-10 text-center">
       <UFileUpload
         accept=".csv,text/csv"
-        label="Drop your Citi CSV here"
+        label="Drop or click to choose your Citi CSV"
         icon="i-lucide-file-spreadsheet"
         class="max-w-xl mx-auto min-h-48"
         @update:model-value="(f: unknown) => onFile(f as File | null)"

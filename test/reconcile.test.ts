@@ -19,6 +19,15 @@ describe('parseCitiCsv', () => {
     expect(lines[1]!.description).toBe('ONLINE PAYMENT, THANK YOU')
     expect([from, to]).toEqual(['2026-09-01', '2026-09-18'])
   })
+  it('parses the newer unquoted dollar amounts with thousands commas', () => {
+    const csv = [
+      'Status,Date,Description,Debit,Credit',
+      'Cleared,10/21/2026,"ONLINE PAYMENT, THANK YOU",, -$ 1,134.19',
+      'Cleared,10/21/2026,"FOOD LION #0149 CLAYTON NC",$ 47.64,',
+      'Cleared,10/01/2026,"MORTGAGE",$ 1,880.00,'
+    ].join('\n')
+    expect(parseCitiCsv(csv).lines.map(l => l.amountCents)).toEqual([-113419, 4764, 188000])
+  })
   it('rejects other files', () => {
     expect(() => parseCitiCsv('Date,Amount\n2026-09-01,5')).toThrow(/Citi/)
   })
@@ -117,6 +126,15 @@ describe('listForReconcile', async () => {
     const { bills } = await listForReconcile('2026-08-01', '2026-09-20')
     expect(bills.map(b => b.name).sort()).toEqual(['Inside', 'Paid later'])
     expect(bills.find(b => b.id === inside.id)).toMatchObject({ amountCents: 1000, cardDueCents: 1000, cardPaidAt: null })
+  })
+
+  it('leaves out bills on the paid directly list, which can be edited', async () => {
+    const { setDirectPayNames } = await import('../server/services/settings')
+    await createBill({ name: 'Ledford Mortgage', amountCents: 188000, createdBy: tim, addedOn: '2026-09-01' })
+    await createBill({ name: 'Netflix', amountCents: 3966, createdBy: tim, addedOn: '2026-09-01' })
+    expect((await listForReconcile('2026-09-01', '2026-09-20')).bills.map(b => b.name)).toEqual(['Netflix'])
+    await setDirectPayNames(['  netflix ', 'netflix', ''])
+    expect((await listForReconcile('2026-09-01', '2026-09-20')).bills.map(b => b.name)).toEqual(['Ledford Mortgage'])
   })
 
   it('reports the reduced card amount and refunds in range', async () => {

@@ -5,7 +5,7 @@ import { createUser } from '../server/services/auth'
 import { sentMail } from '../server/utils/mail'
 import { clearRateLimits } from '../server/utils/rate-limit'
 
-const TABLES = ['refund_shares', 'refunds', 'auth_tokens', 'trusted_devices', 'bill_participants', 'bills', 'reimbursements', 'recurring_bill_participants', 'recurring_bills', 'users']
+const TABLES = ['refund_shares', 'refunds', 'auth_tokens', 'trusted_devices', 'bill_participants', 'bills', 'reimbursements', 'recurring_bill_participants', 'recurring_bills', 'users', 'settings']
 
 let migrated = false
 

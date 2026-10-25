@@ -43,6 +43,13 @@ function splitCsvRow(row: string): string[] {
   return cells.map(s => s.trim())
 }
 
+// Newer Citi exports write "-$ 1,134.19" unquoted, so a thousands comma splits one amount across two cells.
+const AMOUNT_TAIL = /^(-?\s*\$?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d+)?)?\s*,\s*(-?\s*\$?\s*-?\d{1,3}(?:,\d{3})*(?:\.\d+)?)?$/
+function splitAmounts(cells: string[]): [string, string] {
+  const m = cells.join(',').trim().match(AMOUNT_TAIL)
+  return m ? [m[1] ?? '', m[2] ?? ''] : [cells[0] ?? '', cells[1] ?? '']
+}
+
 const toCents = (s: string) => Math.round(Number(s.replace(/[$,\s]/g, '')) * 100)
 
 export function parseCitiCsv(text: string): { lines: StatementLine[], from: string, to: string } {
@@ -52,7 +59,8 @@ export function parseCitiCsv(text: string): { lines: StatementLine[], from: stri
     throw new Error('Not a Citi CSV. Expected the columns Status, Date, Description, Debit, Credit.')
   }
   const lines = rows.slice(1).map((row, i): StatementLine => {
-    const [status = '', date = '', description = '', debit = '', credit = ''] = splitCsvRow(row)
+    const [status = '', date = '', description = '', ...rest] = splitCsvRow(row)
+    const [debit = '', credit = ''] = splitAmounts(rest)
     const [m, d, y] = date.split('/')
     const amountCents = debit ? Math.abs(toCents(debit)) : -Math.abs(toCents(credit))
     const kind = amountCents > 0 ? 'charge' : /^ONLINE PAYMENT/i.test(description) ? 'payment' : 'refund'

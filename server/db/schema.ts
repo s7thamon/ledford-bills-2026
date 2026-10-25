@@ -6,6 +6,7 @@ import {
   foreignKey,
   index,
   int,
+  json,
   mysqlTable,
   serial,
   text,
@@ -143,6 +144,13 @@ export const trustedDevices = mysqlTable('trusted_devices', {
   lastUsedAt: timestamp('last_used_at').notNull().defaultNow(),
   expiresAt: timestamp('expires_at').notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow()
+})
+
+/** Household-wide settings, one JSON value per key. */
+export const settings = mysqlTable('settings', {
+  key: varchar('key', { length: 64 }).primaryKey(),
+  value: json('value').notNull(),
+  ...timestamps
 })
 
 export const billsRelations = relations(bills, ({ many }) => ({

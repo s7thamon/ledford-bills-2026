@@ -1,4 +1,4 @@
-import { and, asc, between, count, desc, eq, gt, inArray, isNull, like, or, sql } from 'drizzle-orm'
+import { and, asc, between, count, desc, eq, gt, inArray, isNull, like, notInArray, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import { schema, useDb } from '../db/client'
 import { todayIso, monthRange } from '../../shared/utils/dates'
@@ -7,6 +7,7 @@ import { allParticipantsPaid, canDeleteBill, canEditAmounts, canMarkCardPaid, ca
 import { cardDue } from '../../shared/utils/credits'
 import type { ReconcileBill, ReconcileRefund } from '../../shared/utils/reconcile'
 import * as notify from './notify'
+import { getDirectPayNames } from './settings'
 
 const { bills, billParticipants, refunds, users } = schema
 
@@ -318,9 +319,12 @@ export async function setPaidWithCard(billId: number, userId: number | null): Pr
 export async function listForReconcile(from: string, to: string): Promise<{ bills: ReconcileBill[], refunds: ReconcileRefund[] }> {
   const start = shiftDate(from, -5)
   const end = shiftDate(to, 5)
+  const directPay = await getDirectPayNames()
   const rows = await useDb().query.bills.findMany({
     where: and(
       isNull(bills.paidWithCardOf),
+      // MySQL compares names case-insensitively, so "ledford mortgage" still counts.
+      directPay.length ? notInArray(bills.name, directPay) : undefined,
       or(between(bills.addedOn, start, end), between(bills.cardPaidAt, new Date(`${start}T00:00:00Z`), new Date(`${end}T23:59:59Z`)))
     ),
     columns: billColumns,
