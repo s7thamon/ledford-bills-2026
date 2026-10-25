@@ -52,6 +52,7 @@ const refreshAll = () => Promise.all([refresh(), refreshRefunds()])
 const refundedCents = (bill: Bill) => bill.refunds.reduce((s, r) => s + r.amountCents, 0)
 const fullyRefunded = (bill: Bill) => refundedCents(bill) >= bill.amountCents
 const refundTip = (bill: Bill) => bill.refunds.map(r => `Refunded ${formatMoney(r.amountCents)} on ${usDotDate(r.refundedOn)}${r.appliedToName ? `, credit used on ${r.appliedToName}` : ', credit not used yet'}`).join(' · ')
+const splitTip = (bill: Bill) => bill.participants.toSorted((a, b) => Number(b.userId === me.value) - Number(a.userId === me.value)).map(p => `${firstNameOf(p.userId)} ${formatMoney(p.amountCents)}`).join(' · ')
 const creditTip = (bill: Bill) => bill.credit ? `Credit from ${bill.credit.sourceName}, refunded ${usDotDate(bill.credit.refundedOn)}` : ''
 const goToMonth = (addedOn: string | null) => addedOn && router.push({ query: { month: addedOn.slice(0, 7) } })
 
@@ -439,7 +440,7 @@ function openEdit(bill: Bill) {
 
       <template #share-cell="{ row }">
         <span class="inline-flex items-center gap-1 tabular-nums">
-          <UTooltip v-if="isCustomSplit(row.original.participants.map(p => p.amountCents))" text="Custom split">
+          <UTooltip v-if="isCustomSplit(row.original.participants.map(p => p.amountCents))" :text="splitTip(row.original)" :delay-duration="0" :content="{ side: 'top' }">
             <UIcon name="i-lucide-arrow-left-right" class="size-3.5 text-muted" />
           </UTooltip>
           <span :class="fullyRefunded(row.original) && 'line-through text-muted'">{{ formatMoney(share(row.original)) }}</span>
