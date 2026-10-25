@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { findSubset, matchCharges, matchPayments, parseCitiCsv, storeKey, type ReconcileBill, type StatementLine } from '../shared/utils/reconcile'
 
 const bill = (id: number, amountCents: number, addedOn: string, extra: Partial<ReconcileBill> = {}): ReconcileBill =>
-  ({ id, name: `Bill ${id}`, amountCents, addedOn, cardPaidAt: null, cardDueCents: amountCents, ...extra })
+  ({ id, name: `Bill ${id}`, amountCents, addedOn, cardPaidAt: null, cardPaidOn: null, cardDueCents: amountCents, ...extra })
 const line = (id: string, amountCents: number, date: string, description: string, kind: StatementLine['kind'] = 'charge'): StatementLine =>
   ({ id, status: 'Cleared', date, description, amountCents, kind })
 
@@ -79,17 +79,31 @@ describe('matchCharges', () => {
 })
 
 describe('matchPayments', () => {
-  const paid = (id: number, due: number, day: string) => bill(id, due, day, { cardPaidAt: `${day}T12:00:00.000Z`, cardDueCents: due })
+  const paid = (id: number, due: number, day: string, at = `${day}T12:00:00.000Z`) => bill(id, due, day, { cardPaidAt: at, cardPaidOn: day, cardDueCents: due })
   it('matches single and combined payments by card amount', () => {
     const lines = [line('p1', -2121, '2026-09-09', 'ONLINE PAYMENT, THANK YOU', 'payment'), line('p2', -30535, '2026-09-09', 'ONLINE PAYMENT, THANK YOU', 'payment')]
     const r = matchPayments(lines, [paid(1, 2121, '2026-09-08'), paid(2, 27468, '2026-09-08'), paid(3, 3067, '2026-09-08')])
-    expect(r.exact).toEqual([{ lineId: 'p1', billIds: [1] }])
-    expect(r.suggestions).toEqual([{ lineId: 'p2', billIds: [2, 3] }])
+    expect(r.exact).toEqual([{ lineIds: ['p1'], billIds: [1] }])
+    expect(r.suggestions).toEqual([{ lineIds: ['p2'], billIds: [2, 3] }])
   })
   it('uses the reduced card amount for credited bills', () => {
-    const credited = bill(1, 32000, '2026-09-08', { cardPaidAt: '2026-09-08T12:00:00.000Z', cardDueCents: 2000 })
-    expect(matchPayments([line('p', -2000, '2026-09-09', 'ONLINE PAYMENT', 'payment')], [credited]).exact).toEqual([{ lineId: 'p', billIds: [1] }])
+    const credited = bill(1, 32000, '2026-09-08', { cardPaidAt: '2026-09-08T12:00:00.000Z', cardPaidOn: '2026-09-08', cardDueCents: 2000 })
+    expect(matchPayments([line('p', -2000, '2026-09-09', 'ONLINE PAYMENT', 'payment')], [credited]).exact).toEqual([{ lineIds: ['p'], billIds: [1] }])
     expect(matchPayments([line('p', -32000, '2026-09-09', 'ONLINE PAYMENT', 'payment')], [credited]).exact).toEqual([])
+  })
+  it('matches a payment to a whole Pay Card click, even past six bills', () => {
+    const at = '2026-10-22T02:26:33.000Z'
+    const batch = [7500, 11252, 4825, 46500, 7201, 23523, 5015, 4563, 2359].map((c, i) => paid(i + 1, c, '2026-10-21', at))
+    const r = matchPayments([line('p', -112738, '2026-10-21', 'ONLINE PAYMENT', 'payment')], batch)
+    expect(r.suggestions).toEqual([{ lineIds: ['p'], billIds: [1, 2, 3, 4, 5, 6, 7, 8, 9] }])
+  })
+  it('matches two payments that together cover one Pay Card click', () => {
+    const at = '2026-10-04T15:28:57.000Z'
+    const r = matchPayments(
+      [line('a', -2003, '2026-10-04', 'ONLINE PAYMENT', 'payment'), line('b', -5512, '2026-10-04', 'ONLINE PAYMENT', 'payment')],
+      [paid(1, 3966, '2026-10-04', at), paid(2, 3549, '2026-10-04', at)]
+    )
+    expect(r.suggestions).toEqual([{ lineIds: ['a', 'b'], billIds: [1, 2] }])
   })
   it('skips bills whose card is not paid', () => {
     expect(matchPayments([line('p', -1000, '2026-09-09', 'ONLINE PAYMENT', 'payment')], [bill(1, 1000, '2026-09-08')]).exact).toEqual([])
@@ -126,6 +140,16 @@ describe('listForReconcile', async () => {
     const { bills } = await listForReconcile('2026-08-01', '2026-09-20')
     expect(bills.map(b => b.name).sort()).toEqual(['Inside', 'Paid later'])
     expect(bills.find(b => b.id === inside.id)).toMatchObject({ amountCents: 1000, cardDueCents: 1000, cardPaidAt: null })
+  })
+
+  it('dates Pay Card clicks in the household timezone', async () => {
+    const late = await createBill({ name: 'Late', amountCents: 1000, createdBy: tim, addedOn: '2026-10-01' })
+    const { useDb, schema } = await import('../server/db/client')
+    const { eq } = await import('drizzle-orm')
+    // 10:26 PM on 10/21 in New York.
+    await useDb().update(schema.bills).set({ cardPaidAt: new Date('2026-10-22T02:26:33Z') }).where(eq(schema.bills.id, late.id))
+    const { bills } = await listForReconcile('2026-10-01', '2026-10-21')
+    expect(bills.find(b => b.id === late.id)!.cardPaidOn).toBe('2026-10-21')
   })
 
   it('leaves out bills on the paid directly list, which can be edited', async () => {

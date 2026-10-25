@@ -16,6 +16,8 @@ export interface ReconcileBill {
   amountCents: number
   addedOn: string
   cardPaidAt: string | null
+  /** cardPaidAt as a household-timezone date: a 10:26 PM click on 10/21 is 10/21, not 10/22 UTC. */
+  cardPaidOn: string | null
   /** What the joint account actually paid Citi for it (after any refund credit). */
   cardDueCents: number
 }
@@ -160,32 +162,59 @@ export function matchCharges(lines: StatementLine[], bills: ReconcileBill[], ref
   }
 }
 
+export interface PaymentMatchSet { lineIds: string[], billIds: number[] }
+
+/** Bills marked card-paid in the same minute: one "Pay Card for All" click, usually one Citi payment. */
+export function payCardBatches(bills: ReconcileBill[]): ReconcileBill[][] {
+  const groups = new Map<string, ReconcileBill[]>()
+  for (const b of bills.filter(b => b.cardPaidAt)) {
+    const key = b.cardPaidAt!.slice(0, 16)
+    groups.set(key, [...(groups.get(key) ?? []), b])
+  }
+  return [...groups.values()]
+}
+
 export function matchPayments(lines: StatementLine[], bills: ReconcileBill[], windowDays = 5) {
   const payments = lines.filter(l => l.kind === 'payment')
-  const paid = bills.filter(b => b.cardPaidAt)
+  const paid = bills.filter(b => b.cardPaidOn)
   const usedBills = new Set<number>()
   const usedLines = new Set<string>()
-  const exact: { lineId: string, billIds: number[] }[] = []
+  const near = (b: ReconcileBill, l: StatementLine) => daysApart(b.cardPaidOn!, l.date) <= windowDays
+  const due = (ids: number[]) => ids.reduce((s, id) => s + paid.find(b => b.id === id)!.cardDueCents, 0)
+
+  const exact: PaymentMatchSet[] = []
   for (const p of payments) {
     const b = paid
-      .filter(b => !usedBills.has(b.id) && b.cardDueCents === -p.amountCents && daysApart(b.cardPaidAt!, p.date) <= windowDays)
-      .sort((x, y) => daysApart(x.cardPaidAt!, p.date) - daysApart(y.cardPaidAt!, p.date))[0]
+      .filter(b => !usedBills.has(b.id) && b.cardDueCents === -p.amountCents && near(b, p))
+      .sort((x, y) => daysApart(x.cardPaidOn!, p.date) - daysApart(y.cardPaidOn!, p.date))[0]
     if (b) {
       usedBills.add(b.id)
       usedLines.add(p.id)
-      exact.push({ lineId: p.id, billIds: [b.id] })
+      exact.push({ lineIds: [p.id], billIds: [b.id] })
     }
   }
-  const suggestions: { lineId: string, billIds: number[] }[] = []
+
+  const suggestions: PaymentMatchSet[] = []
+  const take = (lineIds: string[], billIds: number[]) => {
+    lineIds.forEach(id => usedLines.add(id))
+    billIds.forEach(id => usedBills.add(id))
+    suggestions.push({ lineIds, billIds })
+  }
+  // One payment covering whole Pay Card clicks first (a 9-bill click is one item), then loose bills.
   for (const p of payments.filter(p => !usedLines.has(p.id))) {
-    const near = paid.filter(b => !usedBills.has(b.id) && daysApart(b.cardPaidAt!, p.date) <= windowDays)
-    const ids = findSubset(near.map(b => ({ id: b.id, cents: b.cardDueCents })), -p.amountCents, 2, 6)
-    if (ids) {
-      ids.forEach(id => usedBills.add(id))
-      usedLines.add(p.id)
-      suggestions.push({ lineId: p.id, billIds: ids })
-    }
+    const batches = payCardBatches(paid.filter(b => !usedBills.has(b.id) && near(b, p))).map(g => g.map(b => b.id))
+    const byBatch = findSubset(batches.map((ids, i) => ({ id: i, cents: due(ids) })), -p.amountCents, 1, 6)
+    const ids = byBatch?.flatMap(i => batches[i]!)
+      ?? findSubset(paid.filter(b => !usedBills.has(b.id) && near(b, p)).map(b => ({ id: b.id, cents: b.cardDueCents })), -p.amountCents, 2, 6)
+    if (ids) take([p.id], ids)
   }
+  // Several payments covering one Pay Card click (two transfers for one batch).
+  for (const batch of payCardBatches(paid.filter(b => !usedBills.has(b.id)))) {
+    const pool = payments.filter(p => !usedLines.has(p.id) && batch.every(b => near(b, p)))
+    const lineIds = findSubset(pool.map(p => ({ id: p.id, cents: -p.amountCents })), due(batch.map(b => b.id)), 2, 4)
+    if (lineIds) take(lineIds, batch.map(b => b.id))
+  }
+
   return {
     exact,
     suggestions,

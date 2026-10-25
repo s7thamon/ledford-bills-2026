@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ReconcileBill, ReconcileRefund, StatementLine } from '#shared/utils/reconcile'
+import type { PaymentMatchSet, ReconcileBill, ReconcileRefund, StatementLine } from '#shared/utils/reconcile'
 
 useHead({ title: 'Reconcile' })
 const run = useApi()
@@ -9,7 +9,7 @@ const { data: users } = await useFetch('/api/users', { key: 'users', default: ()
 // Everything below lives in memory only; leaving the page forgets it and the CSV is never uploaded.
 type ChargeMatch = { kind: 'auto' | 'confirmed' | 'manual', lineIds: string[], billId: number }
 type RefundMatch = { lineId: string, refundId: number }
-type PaymentMatch = { kind: 'auto' | 'confirmed' | 'manual', lineId: string, billIds: number[] }
+type PaymentMatch = PaymentMatchSet & { kind: 'auto' | 'confirmed' | 'manual' }
 
 const fileName = ref('')
 const range = ref({ from: '', to: '' })
@@ -27,9 +27,11 @@ const dismissed = ref<string[]>([])
 const history = ref<string[]>([])
 
 const pMatches = ref<PaymentMatch[]>([])
-const pSuggestions = ref<{ lineId: string, billIds: number[] }[]>([])
-const pChecks = ref<Record<string, number[]>>({})
+const pSuggestions = ref<PaymentMatchSet[]>([])
 const pDismissed = ref<string[]>([])
+const pSelLines = ref<string[]>([])
+const pSelBills = ref<number[]>([])
+const pShowOutside = ref(false)
 
 const lineById = computed(() => new Map(lines.value.map(l => [l.id, l])))
 const billById = computed(() => new Map(bills.value.map(b => [b.id, b])))
@@ -37,7 +39,7 @@ const line = (id: string) => lineById.value.get(id)!
 const bill = (id: number) => billById.value.get(id)
 const sum = (ids: string[]) => ids.reduce((s, id) => s + (lineById.value.get(id)?.amountCents ?? 0), 0)
 const suggestionKey = (s: { lineIds: string[], billId: number }) => `${s.billId}:${s.lineIds.join(',')}`
-const pSuggestionKey = (s: { lineId: string, billIds: number[] }) => `${s.lineId}:${s.billIds.join(',')}`
+const pSuggestionKey = (s: PaymentMatchSet) => `${s.lineIds.join(',')}:${s.billIds.join(',')}`
 
 async function onFile(file: File | null | undefined) {
   if (!file) return
@@ -52,7 +54,8 @@ async function onFile(file: File | null | undefined) {
     ignored.value = []
     dismissed.value = []
     pDismissed.value = []
-    pChecks.value = {}
+    pSelLines.value = []
+    pSelBills.value = []
     history.value = []
     await reload()
   }
@@ -94,7 +97,7 @@ function rematch() {
 
   const pKeep = pMatches.value.filter(m => m.kind !== 'auto' && m.billIds.every(id => billIds.has(id)))
   const pTakenBills = new Set(pKeep.flatMap(m => m.billIds))
-  const pTakenLines = new Set(pKeep.map(m => m.lineId))
+  const pTakenLines = new Set(pKeep.flatMap(m => m.lineIds))
   const p = matchPayments(lines.value.filter(l => !pTakenLines.has(l.id)), bills.value.filter(b => !pTakenBills.has(b.id)))
   pMatches.value = [...pKeep, ...p.exact.map(m => ({ kind: 'auto' as const, ...m }))]
   pSuggestions.value = p.suggestions.filter(s => !pDismissed.value.includes(pSuggestionKey(s)))
@@ -217,31 +220,43 @@ const personalItems = (billId: number) => users.value.map(u => ({ label: `${u.na
 
 // ---- Card payments ----
 const pUsedBills = computed(() => new Set([...pMatches.value.flatMap(m => m.billIds), ...pSuggestions.value.flatMap(s => s.billIds)]))
-const pUsedLines = computed(() => new Set([...pMatches.value.map(m => m.lineId), ...pSuggestions.value.map(s => s.lineId)]))
+const pUsedLines = computed(() => new Set([...pMatches.value.flatMap(m => m.lineIds), ...pSuggestions.value.flatMap(s => s.lineIds)]))
 const pLeftoverLines = computed(() => lines.value.filter(l => l.kind === 'payment' && !pUsedLines.value.has(l.id)))
-const pLeftoverBills = computed(() => bills.value.filter(b => b.cardPaidAt && !pUsedBills.value.has(b.id)))
-// Only card payments recorded inside the statement dates should have a Citi line in this file.
-const pOffBy = computed(() => -pLeftoverLines.value.reduce((s, l) => s + l.amountCents, 0)
-  - pLeftoverBills.value.filter(b => inRange(b.cardPaidAt!.slice(0, 10))).reduce((s, b) => s + b.cardDueCents, 0))
-const checkedSum = (lineId: string) => (pChecks.value[lineId] ?? []).reduce((s, id) => s + (bill(id)?.cardDueCents ?? 0), 0)
-function toggleCheck(lineId: string, billId: number) {
-  const cur = pChecks.value[lineId] ?? []
-  pChecks.value = { ...pChecks.value, [lineId]: cur.includes(billId) ? cur.filter(x => x !== billId) : [...cur, billId] }
+// Each Pay Card click (one bill, or a whole "Pay Card for All") is one card on the right.
+const pAllBatches = computed(() => payCardBatches(bills.value.filter(b => b.cardPaidOn && !pUsedBills.value.has(b.id))))
+const batchInRange = (batch: ReconcileBill[]) => batch.some(b => inRange(b.cardPaidOn!))
+const pBatches = computed(() => pShowOutside.value ? pAllBatches.value : pAllBatches.value.filter(batchInRange))
+const pOutsideCount = computed(() => pAllBatches.value.filter(g => !batchInRange(g)).length)
+const batchDue = (batch: ReconcileBill[]) => batch.reduce((s, b) => s + b.cardDueCents, 0)
+const pLinesTotal = computed(() => -pLeftoverLines.value.reduce((s, l) => s + l.amountCents, 0))
+const pBatchesTotal = computed(() => pAllBatches.value.filter(batchInRange).reduce((s, g) => s + batchDue(g), 0))
+
+const pSelLinesSum = computed(() => -pSelLines.value.reduce((s, id) => s + line(id).amountCents, 0))
+const pSelBillsSum = computed(() => pSelBills.value.reduce((s, id) => s + (bill(id)?.cardDueCents ?? 0), 0))
+const toggleLine = (id: string) => (pSelLines.value = pSelLines.value.includes(id) ? pSelLines.value.filter(x => x !== id) : [...pSelLines.value, id])
+const batchSelected = (batch: ReconcileBill[]) => batch.every(b => pSelBills.value.includes(b.id))
+function toggleBatch(batch: ReconcileBill[]) {
+  const ids = batch.map(b => b.id)
+  pSelBills.value = batchSelected(batch) ? pSelBills.value.filter(id => !ids.includes(id)) : [...new Set([...pSelBills.value, ...ids])]
 }
-function matchPayment(lineId: string) {
-  pMatches.value = [...pMatches.value, { kind: 'manual', lineId, billIds: pChecks.value[lineId] ?? [] }]
-  const { [lineId]: _, ...rest } = pChecks.value
-  pChecks.value = rest
+function clearPaymentSelection() {
+  pSelLines.value = []
+  pSelBills.value = []
 }
-function confirmPayment(s: { lineId: string, billIds: number[] }) {
+function matchSelectedPayments() {
+  pMatches.value = [...pMatches.value, { kind: 'manual', lineIds: pSelLines.value, billIds: pSelBills.value }]
+  clearPaymentSelection()
+}
+function confirmPayment(s: PaymentMatchSet) {
   pSuggestions.value = pSuggestions.value.filter(x => x !== s)
   pMatches.value = [...pMatches.value, { kind: 'confirmed', ...s }]
 }
-function dismissPayment(s: { lineId: string, billIds: number[] }) {
+function dismissPayment(s: PaymentMatchSet) {
   pDismissed.value = [...pDismissed.value, pSuggestionKey(s)]
   pSuggestions.value = pSuggestions.value.filter(x => x !== s)
 }
 const unmatchPayment = (m: PaymentMatch) => (pMatches.value = pMatches.value.filter(x => x !== m))
+const paymentsText = (ids: string[]) => ids.map(id => `${usDotDate(line(id).date).slice(0, 5)} ${formatMoney(-line(id).amountCents)}`).join(' + ')
 
 const billNames = (ids: number[]) => ids.map(id => bill(id)?.name ?? `#${id}`).join(' + ')
 const linesText = (ids: string[]) => ids.map(id => formatMoney(line(id).amountCents)).join(' + ')
@@ -478,7 +493,7 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
 
         <details class="surface-card px-4 py-3">
           <summary class="cursor-pointer font-semibold text-highlighted">
-            Matched ({{ matches.length + refundMatches.length }}) · click to review
+            Matched Bills ({{ matches.length + refundMatches.length }}) · click to review
           </summary>
           <ul class="mt-2 divide-y divide-default">
             <li v-for="m in matches" :key="`${m.billId}:${m.lineIds.join()}`" class="flex flex-wrap items-center gap-3 py-2 text-sm">
@@ -503,58 +518,118 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
       </section>
 
       <section class="space-y-3">
-        <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
           <h2 class="text-lg font-semibold text-highlighted">
             Card Payments
           </h2>
-          <span class="text-sm">Payments off by <b class="tabular-nums" :class="pOffBy === 0 ? 'text-success' : 'text-error'">{{ money(pOffBy) }}</b></span>
+          <p class="text-sm text-muted">
+            Each "Online Payment" to Citi should equal the bills you clicked Pay Card on. Pick the payments and Pay Card clicks that go together, then Match.
+          </p>
         </div>
 
-        <div v-for="s in pSuggestions" :key="pSuggestionKey(s)" class="surface-card flex flex-wrap items-center gap-3 px-4 py-3">
-          <span class="flex-1 text-sm"><b>Payment {{ usDotDate(line(s.lineId).date).slice(0, 5) }}</b> {{ formatMoney(-line(s.lineId).amountCents) }} = Pay Card on <b>{{ billNames(s.billIds) }}</b></span>
-          <UButton size="sm" class="rounded-full" @click="confirmPayment(s)">
-            Confirm
-          </UButton>
-          <UButton size="sm" color="neutral" variant="soft" class="rounded-full" @click="dismissPayment(s)">
-            Not This
-          </UButton>
-        </div>
-
-        <div v-for="p in pLeftoverLines" :key="p.id" class="surface-card px-4 py-3 space-y-2">
-          <div class="flex justify-between text-sm">
-            <span><b>Payment {{ usDotDate(p.date) }}</b> · tick the bills it paid</span>
-            <span class="tabular-nums">{{ formatMoney(checkedSum(p.id)) }} of <b>{{ formatMoney(-p.amountCents) }}</b></span>
+        <div v-if="pSuggestions.length" class="space-y-2">
+          <div class="text-xs font-bold uppercase tracking-wider text-muted">
+            Suggested: confirm or dismiss
           </div>
-          <div class="flex flex-wrap gap-2">
-            <UCheckbox
-              v-for="b in pLeftoverBills"
-              :key="b.id"
-              :model-value="(pChecks[p.id] ?? []).includes(b.id)"
-              :label="`${b.name} · ${formatMoney(b.cardDueCents)} · paid ${usDotDate(b.cardPaidAt!.slice(0, 10)).slice(0, 5)}`"
-              class="rounded-full border border-default px-3 py-1"
-              @update:model-value="toggleCheck(p.id, b.id)"
-            />
-            <span v-if="!pLeftoverBills.length" class="text-sm text-muted">No unmatched card payments in the app.</span>
+          <div v-for="s in pSuggestions" :key="pSuggestionKey(s)" class="surface-card flex flex-wrap items-center gap-3 px-4 py-3">
+            <span class="flex-1 text-sm">
+              <b>Payment{{ s.lineIds.length > 1 ? 's' : '' }}</b> {{ paymentsText(s.lineIds) }} = Pay Card on <b>{{ billNames(s.billIds) }}</b>
+            </span>
+            <UButton size="sm" class="rounded-full" @click="confirmPayment(s)">
+              Confirm
+            </UButton>
+            <UButton size="sm" color="neutral" variant="soft" class="rounded-full" @click="dismissPayment(s)">
+              Not This
+            </UButton>
           </div>
-          <UButton v-if="checkedSum(p.id) === -p.amountCents" size="sm" class="rounded-full" @click="matchPayment(p.id)">
-            Match
-          </UButton>
         </div>
 
-        <div v-if="pLeftoverBills.length && !pLeftoverLines.length" class="surface-card px-4 py-3 text-sm">
-          <b>Card paid in the app, no Citi payment found:</b> {{ pLeftoverBills.map(b => `${b.name} ${formatMoney(b.cardDueCents)}`).join(' · ') }}
+        <div class="flex flex-wrap items-center justify-between gap-3 min-h-8">
+          <div class="text-xs font-bold uppercase tracking-wider text-muted">
+            Left over: click payments, then the Pay Card clicks they covered
+          </div>
+          <div v-if="pSelLines.length || pSelBills.length" class="flex items-center gap-2 text-sm tabular-nums">
+            <span>Payments <b>{{ formatMoney(pSelLinesSum) }}</b> · Pay Card <b>{{ formatMoney(pSelBillsSum) }}</b></span>
+            <span v-if="pSelLinesSum !== pSelBillsSum" class="text-error font-medium">{{ formatMoney(Math.abs(pSelLinesSum - pSelBillsSum)) }} apart</span>
+            <UButton size="sm" class="rounded-full" :disabled="!pSelLines.length || !pSelBills.length || pSelLinesSum !== pSelBillsSum" @click="matchSelectedPayments">
+              Match
+            </UButton>
+            <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="clearPaymentSelection">
+              Clear
+            </UButton>
+          </div>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-2">
+          <div class="surface-card p-4 space-y-2 min-h-40">
+            <div class="font-semibold text-highlighted">
+              Citi Payments <span class="text-muted font-normal">· {{ pLeftoverLines.length }} unmatched · {{ formatMoney(pLinesTotal) }}</span>
+            </div>
+            <p v-if="!pLeftoverLines.length" class="text-sm text-muted">
+              Every payment is accounted for.
+            </p>
+            <div
+              v-for="l in pLeftoverLines"
+              :key="l.id"
+              role="button"
+              tabindex="0"
+              class="flex justify-between gap-3 rounded-xl border px-3 py-2 transition"
+              :class="pSelLines.includes(l.id) ? 'border-primary bg-primary/10 ring-2 ring-primary/30' : 'border-default bg-elevated/30'"
+              @click="toggleLine(l.id)"
+              @keydown.enter.self.prevent="toggleLine(l.id)"
+              @keydown.space.self.prevent="toggleLine(l.id)"
+            >
+              <span class="text-sm"><b class="text-highlighted">Payment</b> <span class="text-muted">{{ usDotDate(l.date) }}</span></span>
+              <span class="font-semibold tabular-nums">{{ formatMoney(-l.amountCents) }}</span>
+            </div>
+          </div>
+
+          <div class="surface-card p-4 space-y-2 min-h-40">
+            <div class="flex items-center justify-between gap-3">
+              <div class="font-semibold text-highlighted">
+                Pay Card Clicks With No Match <span class="text-muted font-normal">· {{ pBatches.length }} · {{ formatMoney(pBatchesTotal) }}</span>
+              </div>
+              <USwitch v-if="pOutsideCount" v-model="pShowOutside" size="sm" :label="`Show before & after statement (${pOutsideCount})`" />
+            </div>
+            <p v-if="!pBatches.length" class="text-sm text-muted">
+              Every Pay Card click in this range has a Citi payment.
+            </p>
+            <div
+              v-for="g in pBatches"
+              :key="g[0]!.id"
+              role="button"
+              tabindex="0"
+              class="rounded-xl border px-3 py-2 transition"
+              :class="batchSelected(g) ? 'border-primary bg-primary/10 ring-2 ring-primary/30' : 'border-default bg-elevated/30'"
+              @click="toggleBatch(g)"
+              @keydown.enter.self.prevent="toggleBatch(g)"
+              @keydown.space.self.prevent="toggleBatch(g)"
+            >
+              <div class="flex justify-between gap-3">
+                <span class="text-sm">
+                  <b class="text-highlighted">{{ g.length > 1 ? `Paid together · ${g.length} bills` : g[0]!.name }}</b>
+                  <span class="text-muted"> {{ usDotDate(g[0]!.cardPaidOn!) }}</span>
+                  <UBadge v-if="!batchInRange(g)" :color="g[0]!.cardPaidOn! > range.to ? 'warning' : 'info'" variant="soft" size="sm" class="ms-1">{{ g[0]!.cardPaidOn! > range.to ? 'After statement' : 'Before statement' }}</UBadge>
+                </span>
+                <span class="font-semibold tabular-nums">{{ formatMoney(batchDue(g)) }}</span>
+              </div>
+              <div v-if="g.length > 1" class="mt-1 text-xs text-muted">
+                {{ g.map(b => `${b.name} ${formatMoney(b.cardDueCents)}`).join(' · ') }}
+              </div>
+            </div>
+          </div>
         </div>
 
         <details class="surface-card px-4 py-3">
           <summary class="cursor-pointer font-semibold text-highlighted">
-            Matched payments ({{ pMatches.length }})
+            Matched Card Payments ({{ pMatches.length }}) · click to review
           </summary>
           <ul class="mt-2 divide-y divide-default">
-            <li v-for="m in pMatches" :key="`${m.lineId}`" class="flex items-center gap-3 py-2 text-sm">
+            <li v-for="m in pMatches" :key="m.lineIds.join()" class="flex items-center gap-3 py-2 text-sm">
               <UBadge :color="m.kind === 'auto' ? 'success' : 'primary'" variant="soft" size="sm">
                 {{ m.kind === 'auto' ? 'Auto' : m.kind === 'confirmed' ? 'Confirmed' : 'Manual' }}
               </UBadge>
-              <span class="flex-1">Payment {{ usDotDate(line(m.lineId).date) }} {{ formatMoney(-line(m.lineId).amountCents) }} ⇄ {{ billNames(m.billIds) }}</span>
+              <span class="flex-1">Payment{{ m.lineIds.length > 1 ? 's' : '' }} {{ paymentsText(m.lineIds) }} ⇄ {{ billNames(m.billIds) }}</span>
               <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" class="rounded-full" @click="unmatchPayment(m)">
                 Unmatch
               </UButton>

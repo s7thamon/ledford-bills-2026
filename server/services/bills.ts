@@ -325,7 +325,7 @@ export async function listForReconcile(from: string, to: string): Promise<{ bill
       isNull(bills.paidWithCardOf),
       // MySQL compares names case-insensitively, so "ledford mortgage" still counts.
       directPay.length ? notInArray(bills.name, directPay) : undefined,
-      or(between(bills.addedOn, start, end), between(bills.cardPaidAt, new Date(`${start}T00:00:00Z`), new Date(`${end}T23:59:59Z`)))
+      or(between(bills.addedOn, start, end), between(bills.cardPaidAt, new Date(`${start}T00:00:00Z`), new Date(`${shiftDate(end, 1)}T23:59:59Z`)))
     ),
     columns: billColumns,
     with: withParticipants,
@@ -344,6 +344,7 @@ export async function listForReconcile(from: string, to: string): Promise<{ bill
       amountCents: b.amountCents,
       addedOn: b.addedOn,
       cardPaidAt: b.cardPaidAt ? b.cardPaidAt.toISOString() : null,
+      cardPaidOn: b.cardPaidAt ? todayIso(b.cardPaidAt) : null,
       cardDueCents: cardDue(b)
     })),
     refunds: refundRows
