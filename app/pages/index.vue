@@ -206,7 +206,7 @@ function openEdit(bill: Bill) {
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-1">
         <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" aria-label="Previous month" :class="!canGoBack && 'invisible'" :disabled="!canGoBack" :to="{ query: { month: shiftMonth(month, -1) } }" />
-        <h1 class="text-[1.625rem] font-semibold text-highlighted min-w-52 text-center">
+        <h1 class="text-[1.6875rem] font-semibold text-highlighted min-w-52 text-center">
           {{ monthLabel(month) }}
         </h1>
         <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" aria-label="Next month" :class="month >= currentMonth() && 'invisible'" :disabled="month >= currentMonth()" :to="{ query: { month: shiftMonth(month, 1) } }" />
@@ -252,7 +252,7 @@ function openEdit(bill: Bill) {
             {{ stat.title }}
             <UIcon v-if="stat.copy" name="i-lucide-copy" class="size-3.5" />
           </div>
-          <div class="text-[1.625rem] leading-tight font-bold text-highlighted tabular-nums">
+          <div class="text-[1.6875rem] leading-tight font-bold text-highlighted tabular-nums">
             {{ formatMoney(stat.cents) }}
           </div>
           <div v-if="stat.note" class="text-xs font-medium text-primary mt-0.5">
