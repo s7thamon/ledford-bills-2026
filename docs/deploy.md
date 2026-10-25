@@ -36,12 +36,22 @@ Run these on the Docker host. `<stack>` is the compose project name Dockhand sho
    docker exec -i <stack>-db-1 sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" ledford_bills_flux' < legacy.sql
    ```
 
+   The `-i` is required: without it the file never reaches MySQL and the import silently does nothing. Check the tables arrived:
+
+   ```sh
+   docker exec <stack>-db-1 sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW TABLES" ledford_bills_flux'
+   ```
+
+   If that is empty, the dump probably has its own `USE <old_db>` line (made with `--databases`); `grep -m3 -E "^(CREATE DATABASE|USE )" legacy.sql` shows the name to use in the next step instead.
+
 4. **Dry run, then copy into the new schema.** The app has already created the new tables on start. The target must have no users yet, and no emails are sent during the copy.
 
    ```sh
-   docker exec <stack>-app-1 sh -c 'LEGACY_DATABASE_URL=mysql://root:<root-password>@db:3306/ledford_bills_flux npm run migrate:legacy -- --dry-run'
-   docker exec <stack>-app-1 sh -c 'LEGACY_DATABASE_URL=mysql://root:<root-password>@db:3306/ledford_bills_flux npm run migrate:legacy -- --card-owner=2'
+   docker exec <stack>-app-1 sh -c 'LEGACY_DATABASE_URL=mysql://root:ROOT_PASSWORD@db:3306/ledford_bills_flux npm run migrate:legacy -- --dry-run'
+   docker exec <stack>-app-1 sh -c 'LEGACY_DATABASE_URL=mysql://root:ROOT_PASSWORD@db:3306/ledford_bills_flux npm run migrate:legacy -- --card-owner=2'
    ```
+
+   Replace `ROOT_PASSWORD` with your `MYSQL_ROOT_PASSWORD`.
 
    `--card-owner` is the legacy user id that receives "Card Ready to Pay" emails (the old app hard-coded user 2). It can be changed later in Settings.
 
