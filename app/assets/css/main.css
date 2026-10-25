@@ -35,8 +35,8 @@ body {
   }
 
   .dark .surface-card {
-    background: color-mix(in oklab, var(--ui-bg-muted) 60%, var(--ui-bg));
-    box-shadow: var(--app-card-shadow), 0 0 0 1px rgb(255 255 255 / 0.06);
+    background: color-mix(in oklab, var(--ui-bg-muted) 85%, var(--ui-bg));
+    box-shadow: var(--app-card-shadow), 0 0 0 1px rgb(255 255 255 / 0.1);
   }
 
   .icon-tile {
