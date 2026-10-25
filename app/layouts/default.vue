@@ -21,7 +21,20 @@ const nav = computed<NavigationMenuItem[]>(() => [
   { label: 'Reimbursements', icon: 'i-lucide-arrow-left-right', to: '/reimbursements' }
 ])
 
+const colorMode = useColorMode()
+const themeIcon = computed(() => ({ light: 'i-lucide-sun', dark: 'i-lucide-moon', system: 'i-lucide-monitor' })[colorMode.preference] ?? 'i-lucide-sun')
+const themeMenu = computed<DropdownMenuItem[]>(() => (['light', 'dark', 'system'] as const).map(mode => ({
+  label: mode[0]!.toUpperCase() + mode.slice(1),
+  icon: { light: 'i-lucide-sun', dark: 'i-lucide-moon', system: 'i-lucide-monitor' }[mode],
+  type: 'checkbox',
+  checked: colorMode.preference === mode,
+  onSelect: () => (colorMode.preference = mode)
+})))
+
 const search = ref(String(route.query.q ?? ''))
+const searchInput = useTemplateRef('searchInput')
+// usingInput: the bill-name field is autofocused, so the shortcut must work from inside inputs.
+defineShortcuts({ meta_k: { usingInput: true, handler: () => searchInput.value?.inputRef?.focus() } })
 function submitSearch() {
   navigateTo({ path: '/search', query: search.value ? { q: search.value } : {} })
 }
@@ -53,34 +66,45 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
 
 <template>
   <div class="min-h-screen flex flex-col">
-    <UHeader mode="modal" :ui="{ container: 'max-w-(--ui-container)' }">
-      <template #title>
-        <AppLogo class="size-8" />
-        <span class="sr-only">Ledford Bills</span>
+    <UHeader mode="modal" :ui="{ container: 'max-w-(--ui-container)', left: 'lg:flex-none gap-6', center: 'hidden' }">
+      <template #left>
+        <NuxtLink to="/" class="flex items-center gap-2 shrink-0 font-bold text-lg text-highlighted">
+          <AppLogo class="size-8" />
+          Ledford Bills
+        </NuxtLink>
+        <UNavigationMenu :items="nav" variant="link" class="hidden lg:flex" :ui="{ link: 'rounded-full px-3 py-2 data-active:bg-primary/10' }" />
       </template>
-
-      <UNavigationMenu :items="nav" variant="link" />
 
       <template #right>
         <form class="hidden md:block" @submit.prevent="submitSearch">
-          <UInput v-model="search" icon="i-lucide-search" placeholder="Search bills" class="w-52" aria-label="Search bills" />
+          <UInput ref="searchInput" v-model="search" icon="i-lucide-search" placeholder="Search bills" class="w-60" :ui="{ base: 'rounded-full' }" aria-label="Search bills">
+            <template #trailing>
+              <UKbd value="meta" />
+              <UKbd value="k" />
+            </template>
+          </UInput>
         </form>
+        <UDropdownMenu :items="themeMenu" :content="{ align: 'end' }">
+          <UButton :icon="themeIcon" color="neutral" variant="ghost" class="rounded-full" aria-label="Theme" />
+        </UDropdownMenu>
         <UTooltip :text="adminMode ? 'Admin mode on: you can mark anyone paid' : 'Admin mode'">
           <UButton
             :icon="adminMode ? 'i-lucide-lock-open' : 'i-lucide-lock'"
             :color="adminMode ? 'primary' : 'neutral'"
             :variant="adminMode ? 'soft' : 'ghost'"
+            class="rounded-full"
             :aria-pressed="adminMode"
             aria-label="Toggle admin mode"
             @click="toggleAdmin"
           />
         </UTooltip>
-        <UTooltip :text="connected ? 'Live updates on' : 'Reconnecting…'">
-          <span class="size-2 rounded-full" :class="connected ? 'bg-success' : 'bg-warning animate-pulse'" />
-        </UTooltip>
         <UDropdownMenu :items="userMenu" :content="{ align: 'end' }">
-          <UButton color="neutral" variant="ghost" trailing-icon="i-lucide-chevrons-up-down" aria-label="User menu">
-            <UAvatar :text="initials" size="xs" />
+          <UButton color="neutral" variant="ghost" class="rounded-full p-1" aria-label="User menu">
+            <UTooltip :text="connected ? 'Live updates on' : 'Reconnecting…'">
+              <UChip :color="connected ? 'success' : 'warning'" position="bottom-right" inset>
+                <UAvatar :text="initials" size="sm" class="bg-primary/10 text-primary font-semibold" />
+              </UChip>
+            </UTooltip>
           </UButton>
         </UDropdownMenu>
       </template>
