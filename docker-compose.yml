@@ -1,6 +1,8 @@
 services:
   app:
     build: .
+    # Rebuild on every deploy; without this Compose reuses the first image and git syncs never ship.
+    pull_policy: build
     restart: unless-stopped
     ports:
       - "38417:3000"

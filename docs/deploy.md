@@ -1,6 +1,6 @@
 # Deploying with Dockhand
 
-The stack is `docker-compose.yml`: the app (built from this repo's `Dockerfile`) and MySQL 8.4 with its data in the `mysql-data` named volume. Each start runs `drizzle-kit migrate` before the server, so a Dockhand git sync that rebuilds the app also applies any new schema migrations.
+The stack is `docker-compose.yml`: the app (built from this repo's `Dockerfile`) and MySQL 8.4 with its data in the `mysql-data` named volume. `pull_policy: build` makes every deploy rebuild the image, so a Dockhand git sync ships the new code; each start then runs `drizzle-kit migrate` before the server.
 
 The app listens on host port **38417**. Session cookies are `Secure`, so put it behind HTTPS (reverse proxy) and set `APP_URL` to that public URL. Over plain `http://<ip>:38417` the browser drops the cookie and sign-in will not stick.
 
