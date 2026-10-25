@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { countUnpaidInMonth, createBill, deleteBill, getBill, markCardPaid, markParticipantPaid, setPaidWithCard, updateBill } from '../server/services/bills'
+import { countUnpaidInMonth, createBill, deleteBill, getBill, listBills, markCardPaid, markParticipantPaid, setPaidWithCard, updateBill } from '../server/services/bills'
 import { applyRefund, deleteRefund, listRefunds, recordRefund, unapplyRefund } from '../server/services/refunds'
 import { sentMail } from '../server/utils/mail'
 import { canMarkCardPaid } from '../shared/utils/rules'
@@ -180,6 +180,13 @@ describe('refunds', () => {
     await markParticipantPaid(bill.id, tim, tim, false)
     await markParticipantPaid(bill.id, kelly, kelly, false)
     expect(await countUnpaidInMonth('2026-09')).toBe(0)
+  })
+
+  it('the cardUnpaid filter skips different-card bills', async () => {
+    const shared = await createBill({ name: 'Shared', amountCents: 1000, createdBy: tim, addedOn: '2026-09-05' })
+    const personal = await createBill({ name: 'Personal', amountCents: 1000, createdBy: tim, addedOn: '2026-09-06' })
+    await setPaidWithCard(personal.id, tim)
+    expect((await listBills({ month: '2026-09', userId: tim, cardUnpaid: true })).map(b => b.id)).toEqual([shared.id])
   })
 
   it('cannot apply a credit to a different-card bill', async () => {

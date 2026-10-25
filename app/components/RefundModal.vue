@@ -25,7 +25,8 @@ const firstName = (id: number) => props.users.find(u => u.id === id)?.name.split
 
 watch(open, (isOpen) => {
   if (!isOpen) return
-  amount.value = moneyNumber(remaining.value)
+  // Start empty so a partial return is never saved as a full refund by accident.
+  amount.value = ''
   refundedOn.value = todayIso()
 })
 
@@ -46,8 +47,13 @@ async function save() {
     <template #body>
       <form id="record-refund" class="space-y-4" @submit.prevent="save">
         <div class="grid grid-cols-2 gap-3">
-          <UFormField label="Refund Amount" :help="`Up to ${formatMoney(remaining)}`" required>
-            <UInput v-model="amount" icon="i-lucide-dollar-sign" inputmode="decimal" class="w-full" autofocus />
+          <UFormField label="Refund Amount" required>
+            <UInput v-model="amount" icon="i-lucide-dollar-sign" inputmode="decimal" :placeholder="`Up to ${moneyNumber(remaining)}`" class="w-full" autofocus />
+            <template #help>
+              <UButton variant="link" size="xs" class="p-0" @click="amount = moneyNumber(remaining)">
+                Use full {{ formatMoney(remaining) }}
+              </UButton>
+            </template>
           </UFormField>
           <UFormField label="Date It Hit the Card" required>
             <UInput v-model="refundedOn" type="date" class="w-full" />
@@ -61,7 +67,7 @@ async function save() {
             <span class="text-toned">{{ firstName(Number(userId)) }}'s credit</span><b class="tabular-nums">{{ formatMoney(c) }}</b>
           </div>
         </div>
-        <p v-else class="text-sm text-error">
+        <p v-else-if="amount" class="text-sm text-error">
           Enter an amount between $0.01 and {{ formatMoney(remaining) }}.
         </p>
       </form>

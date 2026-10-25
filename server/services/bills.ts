@@ -98,7 +98,7 @@ export async function getBill(id: number): Promise<BillDto> {
 export async function listBills(opts: { month: string, userId: number, userUnpaid?: boolean, cardUnpaid?: boolean }): Promise<BillDto[]> {
   const [start, end] = monthRange(opts.month)
   const rows = await useDb().query.bills.findMany({
-    where: and(between(bills.addedOn, start, end), opts.cardUnpaid ? isNull(bills.cardPaidAt) : undefined),
+    where: and(between(bills.addedOn, start, end), opts.cardUnpaid ? and(isNull(bills.cardPaidAt), isNull(bills.paidWithCardOf)) : undefined),
     columns: billColumns,
     with: withParticipants,
     orderBy: [desc(bills.addedOn), desc(bills.id)]
