@@ -93,6 +93,9 @@ export async function recordRefund(billId: number, input: { amountCents: number,
   if (!onSharedCard(bill)) {
     throw createError({ statusCode: 409, statusMessage: 'This bill was paid by check, so the refund did not go to the shared card.' })
   }
+  if (isDirectPayName(bill.name, await getDirectPayNames())) {
+    throw createError({ statusCode: 409, statusMessage: 'This bill is paid directly from the shared account, so the refund did not go to the Citi card.' })
+  }
   const remaining = bill.amountCents - bill.refunds.reduce((sum, r) => sum + r.amountCents, 0)
   if (input.amountCents < 1 || input.amountCents > remaining) {
     throw createError({ statusCode: 422, statusMessage: `The refund can be at most ${(remaining / 100).toFixed(2)}.` })

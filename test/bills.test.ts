@@ -39,7 +39,7 @@ describe('bills', () => {
     const bill = await createBill({ name: 'Locked', amountCents: 1000, createdBy: tim })
     await markParticipantPaid(bill.id, kelly, kelly, false)
     await expectHttpError(updateBill(bill.id, { name: 'Nope' }), 409)
-    await expectHttpError(deleteBill(bill.id), 409)
+    await expectHttpError(deleteBill(bill.id), 403)
   })
 
   it('deletes unpaid bills', async () => {

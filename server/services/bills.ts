@@ -3,7 +3,7 @@ import { createError } from 'h3'
 import { schema, useDb, type Db } from '../db/client'
 import { todayIso, monthRange } from '../../shared/utils/dates'
 import { splitAmounts } from '../../shared/utils/split'
-import { allParticipantsPaid, canDeleteBill, canEditAmounts, canMarkCardPaid, canMarkParticipantPaid, canRemoveCredit, isDirectPayName } from '../../shared/utils/rules'
+import { allParticipantsPaid, canAdminDeleteBill, canDeleteBill, canEditAmounts, canMarkCardPaid, canMarkParticipantPaid, canRemoveCredit, isDirectPayName } from '../../shared/utils/rules'
 import { cardDue, creditFromPieces, shareDue, type CreditLike } from '../../shared/utils/credits'
 import type { ReconcileBill, ReconcileRefund } from '../../shared/utils/reconcile'
 import { searchKey, type InsightBill } from '../../shared/utils/insights'
@@ -248,11 +248,22 @@ export async function updateBill(id: number, input: { name?: string, amountCents
   return getBill(id)
 }
 
-export async function deleteBill(id: number): Promise<BillDto> {
+/**
+ * Unpaid bills can always be deleted. A paid one only in admin mode: the bill that actually went on a personal card,
+ * settled by hand first. Deleting hands its credit back and takes its unused refunds with it.
+ */
+export async function deleteBill(id: number, adminMode = false): Promise<BillDto> {
   const bill = await getBill(id)
   if (!canDeleteBill(bill)) {
-    throw createError({ statusCode: 409, statusMessage: 'Bills with payments cannot be deleted.' })
+    if (!adminMode) throw createError({ statusCode: 403, statusMessage: 'Turn on admin mode to delete a bill that has payments.' })
+    if (!canAdminDeleteBill(bill, isDirectPayName(bill.name, await getDirectPayNames()))) {
+      throw createError({ statusCode: 409, statusMessage: 'Only a shared-card bill whose card is not paid yet can be deleted after payments.' })
+    }
+    if (bill.refunds.some(r => r.uses.length)) {
+      throw createError({ statusCode: 409, statusMessage: "Remove the credit this bill's refund gave other bills first." })
+    }
   }
+  // Cascades remove its credit pieces (the credit is available again) and its refunds.
   await useDb().delete(bills).where(eq(bills.id, id))
   return bill
 }
