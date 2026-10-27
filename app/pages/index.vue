@@ -515,7 +515,7 @@ function openEdit(bill: Bill) {
             + {{ formatMoney(row.original.credit.amountCents) }} credit
           </span>
         </div>
-        <UButton v-else-if="canMarkCardPaid(row.original)" size="sm" variant="outline" class="rounded-full px-4" :loading="busy === `card:${row.original.id}`" @click.stop="payCard(row.original)">
+        <UButton v-else-if="canMarkCardPaid(row.original)" size="sm" class="rounded-full px-4" :loading="busy === `card:${row.original.id}`" @click.stop="payCard(row.original)">
           {{ isDirectPay(row.original) ? 'Pay Account' : 'Pay Card' }}<template v-if="row.original.credit">&nbsp;{{ formatMoney(cardDue(row.original)) }}</template>
         </UButton>
         <span v-else class="text-dimmed">—</span>
