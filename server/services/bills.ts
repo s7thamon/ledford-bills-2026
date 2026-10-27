@@ -40,6 +40,7 @@ export interface BillDto {
   recurringBillId: number | null
   createdBy: number
   paidWithCardOf: number | null
+  paidByCheck: boolean
   participants: { userId: number, amountCents: number, paidAt: Date | null }[]
   /** The refund credit this bill absorbed, if any (at most one). */
   credit: BillCredit | null
@@ -59,7 +60,7 @@ const withParticipants = {
     with: { shares: { columns: { userId: true, amountCents: true } }, bill: { columns: { name: true, addedOn: true } } }
   }
 } as const
-const billColumns = { id: true, name: true, amountCents: true, addedOn: true, cardPaidAt: true, recurringBillId: true, createdBy: true, paidWithCardOf: true } as const
+const billColumns = { id: true, name: true, amountCents: true, addedOn: true, cardPaidAt: true, recurringBillId: true, createdBy: true, paidWithCardOf: true, paidByCheck: true } as const
 
 type BillRow = NonNullable<Awaited<ReturnType<typeof findBill>>>
 
@@ -102,7 +103,7 @@ export async function getBill(id: number): Promise<BillDto> {
 export async function listBills(opts: { month: string, userId: number, userUnpaid?: boolean, cardUnpaid?: boolean }): Promise<BillDto[]> {
   const [start, end] = monthRange(opts.month)
   const rows = await useDb().query.bills.findMany({
-    where: and(between(bills.addedOn, start, end), opts.cardUnpaid ? and(isNull(bills.cardPaidAt), isNull(bills.paidWithCardOf)) : undefined),
+    where: and(between(bills.addedOn, start, end), opts.cardUnpaid ? and(isNull(bills.cardPaidAt), isNull(bills.paidWithCardOf), eq(bills.paidByCheck, false)) : undefined),
     columns: billColumns,
     with: withParticipants,
     orderBy: [desc(bills.addedOn), desc(bills.id)]
@@ -249,7 +250,7 @@ export async function deleteBill(id: number): Promise<BillDto> {
 
 export async function notifyIfCardReady(billId: number) {
   const bill = await getBill(billId)
-  if (canMarkCardPaid(bill)) await notify.cardReady(bill)
+  if (canMarkCardPaid(bill)) await notify.cardReady(bill, (await getDirectPayNames()).some(n => n.toLowerCase() === bill.name.toLowerCase()))
 }
 
 /** Returns false when the share was already paid (nothing changed). */
@@ -307,7 +308,7 @@ export async function unpaidByMonth(fromMonth: string, toMonth: string): Promise
     .from(bills)
     .where(and(
       between(bills.addedOn, monthRange(fromMonth)[0], monthRange(toMonth)[1]),
-      sql`((${bills.cardPaidAt} is null and ${bills.paidWithCardOf} is null) or exists (select 1 from bill_participants bp where bp.bill_id = ${bills.id} and bp.paid_at is null))`
+      sql`((${bills.cardPaidAt} is null and ${bills.paidWithCardOf} is null and not ${bills.paidByCheck}) or exists (select 1 from bill_participants bp where bp.bill_id = ${bills.id} and bp.paid_at is null))`
     ))
     .groupBy(month)
   return Object.fromEntries(rows.map(r => [r.month, r.n]))
@@ -315,8 +316,8 @@ export async function unpaidByMonth(fromMonth: string, toMonth: string): Promise
 
 export const countUnpaidInMonth = async (month: string) => (await unpaidByMonth(month, month))[month] ?? 0
 
-/** Mark the purchase as made on someone's personal card (or clear it with null). */
-export async function setPaidWithCard(billId: number, userId: number | null): Promise<BillDto> {
+/** Mark the purchase as made on someone's personal card, by check (userId null), or back on the shared card. */
+export async function setPaidWithCard(billId: number, userId: number | null, check = false): Promise<BillDto> {
   const bill = await getBill(billId)
   // Refunds and credits live on the shared card; switching cards afterwards would leave Citi underpaid.
   if (bill.cardPaidAt || bill.credit || bill.refunds.length) {
@@ -325,7 +326,7 @@ export async function setPaidWithCard(billId: number, userId: number | null): Pr
   if (userId !== null && !(await householdIds()).includes(userId)) {
     throw createError({ statusCode: 422, statusMessage: 'Pick someone in the household.' })
   }
-  await useDb().update(bills).set({ paidWithCardOf: userId }).where(eq(bills.id, billId))
+  await useDb().update(bills).set({ paidWithCardOf: check ? null : userId, paidByCheck: check }).where(eq(bills.id, billId))
   return getBill(billId)
 }
 
@@ -337,6 +338,7 @@ export async function listForReconcile(from: string, to: string): Promise<{ bill
   const rows = await useDb().query.bills.findMany({
     where: and(
       isNull(bills.paidWithCardOf),
+      eq(bills.paidByCheck, false),
       // MySQL compares names case-insensitively, so "ledford mortgage" still counts.
       directPay.length ? notInArray(bills.name, directPay) : undefined,
       or(between(bills.addedOn, start, end), between(bills.cardPaidAt, new Date(`${start}T00:00:00Z`), new Date(`${shiftDate(end, 1)}T23:59:59Z`)))
@@ -349,7 +351,7 @@ export async function listForReconcile(from: string, to: string): Promise<{ bill
     .from(refunds)
     // A refund on a personal-card bill went back to that card, not Citi.
     .innerJoin(bills, eq(bills.id, refunds.billId))
-    .where(and(between(refunds.refundedOn, start, end), isNull(bills.paidWithCardOf)))
+    .where(and(between(refunds.refundedOn, start, end), isNull(bills.paidWithCardOf), eq(bills.paidByCheck, false)))
     .orderBy(asc(refunds.refundedOn), asc(refunds.id))
   return {
     bills: rows.map(toDto).map(b => ({

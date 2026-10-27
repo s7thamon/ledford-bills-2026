@@ -17,6 +17,7 @@ interface Bill {
   amountCents: number
   cardPaidAt: string | null
   paidWithCardOf: number | null
+  paidByCheck: boolean
   credit: { amountCents: number, shares: Record<number, number> } | null
   participants: { userId: number, amountCents: number, paidAt: string | null }[]
 }
@@ -35,7 +36,7 @@ const sharesText = (r: Refund) => Object.entries(r.shares).map(([id, c]) => `${f
 function targets(r: Refund) {
   const credit = { amountCents: r.amountCents, shares: r.shares }
   return props.bills
-    .filter(b => b.id !== r.billId && canEditBill(b) && !b.cardPaidAt && !b.paidWithCardOf && !b.credit && canAbsorb(b, credit))
+    .filter(b => b.id !== r.billId && canEditBill(b) && !b.cardPaidAt && onSharedCard(b) && !b.credit && canAbsorb(b, credit))
     .map(b => ({ label: `${b.name} · ${formatMoney(b.amountCents)}`, value: b.id }))
 }
 

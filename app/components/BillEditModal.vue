@@ -6,6 +6,7 @@ interface Bill {
   addedOn: string
   cardPaidAt: string | null
   paidWithCardOf: number | null
+  paidByCheck: boolean
   credit: { amountCents: number, shares: Record<number, number>, sourceName: string } | null
   refunds: { amountCents: number }[]
   participants: { userId: number, amountCents: number, paidAt: string | null }[]
@@ -26,16 +27,18 @@ const editable = computed(() => !!props.bill && canEditAmounts(props.bill))
 const deletable = computed(() => !!props.bill && canDeleteBill(props.bill))
 const totalCents = computed(() => parseAmount(amount.value))
 const refundOpen = ref(false)
-const refundable = computed(() => !!props.bill && !editable.value && !props.bill.paidWithCardOf
+const refundable = computed(() => !!props.bill && !editable.value && onSharedCard(props.bill)
   && props.bill.amountCents > props.bill.refunds.reduce((s, r) => s + r.amountCents, 0))
 const amountsChanged = computed(() => !!props.bill && (totalCents.value !== props.bill.amountCents
   || props.bill.participants.some(p => parseAmount(splits.value[p.userId]) !== p.amountCents)))
 
 // USelect cannot hold null, so 0 stands for the shared card.
-const cardItems = computed(() => [{ label: 'Shared card (Citi)', value: 0 }, ...props.users.map(u => ({ label: `${u.name.split(' ')[0]}'s personal card`, value: u.id }))])
-async function setCard(userId: number) {
+// -1 is "Check": paid from the shared account, never on a card.
+const cardItems = computed(() => [{ label: 'Shared card (Citi)', value: 0 }, { label: 'Check (shared account)', value: -1 }, ...props.users.map(u => ({ label: `${u.name.split(' ')[0]}'s personal card`, value: u.id }))])
+async function setCard(value: number) {
   if (!props.bill) return
-  if (await run(() => $fetch(`/api/bills/${props.bill!.id}/card`, { method: 'PUT', body: { userId: userId || null } }), userId ? 'Marked as paid with a different card' : 'Back on the shared card')) emit('changed')
+  const message = value === -1 ? 'Marked as paid by check' : value ? 'Marked as paid with a different card' : 'Back on the shared card'
+  if (await run(() => $fetch(`/api/bills/${props.bill!.id}/card`, { method: 'PUT', body: { userId: value > 0 ? value : null, check: value === -1 } }), message)) emit('changed')
 }
 
 watch(() => [open.value, props.bill] as const, ([isOpen, bill]) => {
@@ -89,7 +92,7 @@ async function remove() {
         </UFormField>
         <SplitFields v-model="splits" :users="users" :total-cents="totalCents" :disabled="!editable" />
         <UFormField label="Paid With" help="Pick a personal card if this was not charged to the shared Citi card.">
-          <USelect :model-value="bill?.paidWithCardOf ?? 0" :items="cardItems" class="w-full" :disabled="!bill || !!bill.cardPaidAt || !!bill.credit || bill.refunds.length > 0" @update:model-value="v => setCard(Number(v))" />
+          <USelect :model-value="bill?.paidByCheck ? -1 : bill?.paidWithCardOf ?? 0" :items="cardItems" class="w-full" :disabled="!bill || !!bill.cardPaidAt || !!bill.credit || bill.refunds.length > 0" @update:model-value="v => setCard(Number(v))" />
         </UFormField>
         <UAlert
           v-if="bill?.credit && amountsChanged"

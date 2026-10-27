@@ -32,13 +32,15 @@ export async function billAdded(bill: BillInfo, participants: { userId: number, 
   }
 }
 
-export async function cardReady(bill: BillInfo) {
+/** directPay: paid straight from the shared account (the mortgage), so it's the account, not the card, that's ready. */
+export async function cardReady(bill: BillInfo, directPay = false) {
   const owner = await cardOwner()
   if (!owner) return
+  const what = directPay ? 'Account' : 'Card'
   queueMail({
     to: owner.email,
-    subject: billSubject('Card Ready to Pay', bill),
-    lines: ['This bill has been paid by all parties.', `Bill: ${bill.name}`, `Total Amount: ${formatMoney(bill.amountCents)}`, 'The card is now ready to be paid.'],
+    subject: billSubject(`${what} Ready to Pay`, bill),
+    lines: ['This bill has been paid by all parties.', `Bill: ${bill.name}`, `Total Amount: ${formatMoney(bill.amountCents)}`, `The ${what.toLowerCase()} is now ready to be paid.`],
     action: { label: 'View Bill', url: billUrl(bill) }
   })
 }

@@ -17,6 +17,13 @@ describe('different card and credits in rules', () => {
     expect(billInTab(personal, 'card', 1)).toBe(false)
     expect(cardUnpaidCents([personal])).toBe(0)
   })
+  it('treats a check bill as off the card', () => {
+    const check = { amountCents: 1000, cardPaidAt: null, paidByCheck: true, participants: [p(1, true), p(2, true)] }
+    expect(canMarkCardPaid(check)).toBe(false)
+    expect(billInTab(check, 'ready', 1)).toBe(false)
+    expect(billInTab(check, 'card', 1)).toBe(false)
+    expect(cardUnpaidCents([check])).toBe(0)
+  })
   it('uses the reduced card amount for credited bills', () => {
     expect(readyForCardCents([credited])).toBe(2000)
     expect(cardUnpaidCents([credited])).toBe(2000)

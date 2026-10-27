@@ -69,6 +69,8 @@ export const bills = mysqlTable('bills', {
   cardPaidAt: timestamp('card_paid_at'),
   /** Set when the purchase went on this person's personal card instead of the shared one. */
   paidWithCardOf: fk('paid_with_card_of').references(() => users.id, { onDelete: 'set null' }),
+  /** Paid by check from the shared account: the shares still get paid, but nothing goes on the Citi card. */
+  paidByCheck: boolean('paid_by_check').notNull().default(false),
   ...timestamps
 }, t => [
   index('bills_added_on_idx').on(t.addedOn),

@@ -195,6 +195,9 @@ const columns: TableColumn<Bill>[] = [
           <UBadge v-if="row.original.cardPaidAt" color="success" variant="soft" size="md" icon="i-lucide-check">
             Settled
           </UBadge>
+          <UBadge v-else-if="row.original.paidByCheck && allParticipantsPaid(row.original)" color="success" variant="soft" size="md" icon="i-lucide-file-pen-line">
+            Check
+          </UBadge>
           <UBadge v-else-if="row.original.paidWithCardOf" color="neutral" variant="soft" size="md" icon="i-lucide-wallet">
           Personal card
         </UBadge>

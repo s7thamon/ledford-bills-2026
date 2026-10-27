@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createBill, countUnpaidInMonth, unpaidByMonth, deleteBill, getBill, listBills, markCardPaid, markParticipantPaid, paySelected, updateBill, billNameSuggestions, searchBills } from '../server/services/bills'
+import { createBill, countUnpaidInMonth, unpaidByMonth, setPaidWithCard, listForReconcile, deleteBill, getBill, listBills, markCardPaid, markParticipantPaid, paySelected, updateBill, billNameSuggestions, searchBills } from '../server/services/bills'
 import { sentMail } from '../server/utils/mail'
 import { expectHttpError, flushMail, resetDb, seedUsers } from './helpers'
 
@@ -65,6 +65,30 @@ describe('bills', () => {
     expect(sentMail.map(m => [m.to, m.subject])).toEqual([['kelly@example.com', 'Card Ready to Pay - "Card" - $10.00']])
     await markCardPaid(bill.id)
     await expectHttpError(markCardPaid(bill.id), 409)
+  })
+
+  it('settles a check bill once both shares are paid, with no card step or email', async () => {
+    const bill = await createBill({ name: 'Baker Home', amountCents: 1000, createdBy: tim, addedOn: '2026-09-05' })
+    await setPaidWithCard(bill.id, null, true)
+    expect((await getBill(bill.id))).toMatchObject({ paidByCheck: true, paidWithCardOf: null })
+    expect(await countUnpaidInMonth('2026-09')).toBe(1)
+    sentMail.length = 0
+    await markParticipantPaid(bill.id, tim, tim, false)
+    await markParticipantPaid(bill.id, kelly, kelly, false)
+    await flushMail()
+    expect(sentMail.filter(m => m.subject.includes('Ready to Pay'))).toEqual([])
+    expect(await countUnpaidInMonth('2026-09')).toBe(0)
+    await expectHttpError(markCardPaid(bill.id), 409)
+    expect((await listForReconcile('2026-09-01', '2026-09-30')).bills).toEqual([])
+  })
+
+  it('says Account Ready to Pay for a paid directly bill', async () => {
+    const bill = await createBill({ name: 'Ledford Mortgage', amountCents: 1000, createdBy: tim })
+    await markParticipantPaid(bill.id, tim, tim, false)
+    sentMail.length = 0
+    await markParticipantPaid(bill.id, kelly, kelly, false)
+    await flushMail()
+    expect(sentMail.map(m => m.subject)).toEqual(['Account Ready to Pay - "Ledford Mortgage" - $10.00'])
   })
 
   it('bulk pays my shares and then the card', async () => {

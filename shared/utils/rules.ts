@@ -7,6 +7,8 @@ export interface BillLike {
   participants: ParticipantLike[]
   /** Set when the purchase went on someone's personal card instead of the shared one. */
   paidWithCardOf?: number | null
+  /** Set when the bill was paid by check from the shared account. */
+  paidByCheck?: boolean
   credit?: CreditLike | null
 }
 
@@ -23,7 +25,9 @@ export const canEditAmounts = (bill: BillLike) => canEditBill(bill)
   || (!!bill.credit && !bill.cardPaidAt && bill.participants.every(p => !p.paidAt || shareDue(p, bill.credit) === 0))
 export const canDeleteBill = (bill: BillLike) => canEditBill(bill) && !bill.cardPaidAt
 export const allParticipantsPaid = (bill: BillLike) => bill.participants.length > 0 && bill.participants.every(p => p.paidAt)
-export const canMarkCardPaid = (bill: BillLike) => !bill.cardPaidAt && !bill.paidWithCardOf && allParticipantsPaid(bill)
+/** False for personal-card and check bills, which never go on the shared Citi card. */
+export const onSharedCard = (bill: BillLike) => !bill.paidWithCardOf && !bill.paidByCheck
+export const canMarkCardPaid = (bill: BillLike) => !bill.cardPaidAt && onSharedCard(bill) && allParticipantsPaid(bill)
 
 /** You can always pay your own share; admin mode lets you mark anyone's. */
 export const canMarkParticipantPaid = (actorId: number, targetUserId: number, adminMode: boolean) =>

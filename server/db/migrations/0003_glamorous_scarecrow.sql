@@ -1,0 +1,1 @@
+ALTER TABLE `bills` ADD `paid_by_check` boolean DEFAULT false NOT NULL;

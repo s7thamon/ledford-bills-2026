@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 import { createError } from 'h3'
 import { schema, useDb } from '../db/client'
 import { canAbsorb, shareDue, splitRefund } from '../../shared/utils/credits'
-import { canEditBill } from '../../shared/utils/rules'
+import { canEditBill, onSharedCard } from '../../shared/utils/rules'
 import { getBill, notifyIfCardReady, type BillDto } from './bills'
 
 const { refunds, refundShares, billParticipants } = schema
@@ -64,8 +64,8 @@ export async function recordRefund(billId: number, input: { amountCents: number,
   if (canEditBill(bill)) {
     throw createError({ statusCode: 409, statusMessage: 'Nobody has paid this bill yet. Change its amount instead.' })
   }
-  if (bill.paidWithCardOf) {
-    throw createError({ statusCode: 409, statusMessage: 'This bill was paid with a personal card, so the refund did not go to the shared card.' })
+  if (!onSharedCard(bill)) {
+    throw createError({ statusCode: 409, statusMessage: `This bill was paid ${bill.paidByCheck ? 'by check' : 'with a personal card'}, so the refund did not go to the shared card.` })
   }
   const remaining = bill.amountCents - bill.refunds.reduce((sum, r) => sum + r.amountCents, 0)
   if (input.amountCents < 1 || input.amountCents > remaining) {
@@ -85,7 +85,7 @@ export async function applyRefund(refundId: number, billId: number): Promise<Bil
   const refund = await getRefund(refundId)
   if (refund.appliedToBillId) throw createError({ statusCode: 409, statusMessage: 'That credit has already been used.' })
   const bill = await getBill(billId)
-  if (bill.id === refund.billId || !canEditBill(bill) || bill.cardPaidAt || bill.paidWithCardOf || bill.credit) {
+  if (bill.id === refund.billId || !canEditBill(bill) || bill.cardPaidAt || !onSharedCard(bill) || bill.credit) {
     throw createError({ statusCode: 409, statusMessage: 'A credit can only go on an unpaid shared-card bill that has no other credit.' })
   }
   const credit = { amountCents: refund.amountCents, shares: refund.shares }

@@ -56,6 +56,10 @@ const splitTip = (bill: Bill) => bill.participants.toSorted((a, b) => Number(b.u
 const creditTip = (bill: Bill) => bill.credit ? `Credit from ${bill.credit.sourceName}, refunded ${usDotDate(bill.credit.refundedOn)}` : ''
 const goToMonth = (addedOn: string | null) => addedOn && router.push({ query: { month: addedOn.slice(0, 7) } })
 
+// Bills on the Settings "Paid Directly" list (the mortgage) are paid from the shared account, so their button says Pay Account.
+const { data: directPay } = await useFetch('/api/settings/direct-pay', { default: () => [] as string[] })
+const isDirectPay = (bill: Bill) => directPay.value.some(n => n.toLowerCase() === bill.name.toLowerCase())
+
 const { data: suggestions, refresh: refreshSuggestions } = await useFetch('/api/bills/suggestions', { key: 'bill-suggestions', default: () => [] })
 
 type Bill = (typeof bills.value)[number]
@@ -498,6 +502,11 @@ function openEdit(bill: Bill) {
             {{ firstNameOf(row.original.paidWithCardOf) }}'s card
           </UBadge>
         </UTooltip>
+        <UTooltip v-else-if="row.original.paidByCheck" text="Paid by check from the shared account; nothing goes on the Citi card" :content="{ side: 'top' }">
+          <UBadge color="neutral" variant="soft" size="md" icon="i-lucide-file-pen-line">
+            Check
+          </UBadge>
+        </UTooltip>
         <div v-else-if="row.original.cardPaidAt" class="inline-flex flex-col items-center">
           <UBadge color="success" variant="soft" size="md" icon="i-lucide-check">
             Paid
@@ -507,7 +516,7 @@ function openEdit(bill: Bill) {
           </span>
         </div>
         <UButton v-else-if="canMarkCardPaid(row.original)" size="sm" variant="outline" class="rounded-full px-4" :loading="busy === `card:${row.original.id}`" @click.stop="payCard(row.original)">
-          Pay Card<template v-if="row.original.credit">&nbsp;{{ formatMoney(cardDue(row.original)) }}</template>
+          {{ isDirectPay(row.original) ? 'Pay Account' : 'Pay Card' }}<template v-if="row.original.credit">&nbsp;{{ formatMoney(cardDue(row.original)) }}</template>
         </UButton>
         <span v-else class="text-dimmed">—</span>
       </template>
