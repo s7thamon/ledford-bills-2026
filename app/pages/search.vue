@@ -23,12 +23,17 @@ const maxAmount = ref(String(route.query.max ?? ''))
 watch([minAmount, maxAmount], ([min, max]) => router.replace({ query: { ...route.query, min: min || undefined, max: max || undefined } }))
 const setRange = (v: unknown) => router.replace({ query: { ...route.query, range: v === 'all' ? undefined : String(v) } })
 
-const filtered = computed(() => {
+const inRange = computed(() => {
   const months = range.value === 'all' ? null : new Set(rangeMonths(range.value).months)
   const min = parseAmount(minAmount.value)
   const max = parseAmount(maxAmount.value)
   return results.value.filter(b => (!months || months.has(b.addedOn.slice(0, 7))) && b.amountCents >= min && (!max || b.amountCents <= max))
 })
+// Names picked in By Name narrow everything else on the page; none picked shows them all.
+const pickedNames = ref<string[]>([])
+watch(q, () => (pickedNames.value = []))
+const togglePicked = (name: string) => (pickedNames.value = pickedNames.value.includes(name) ? pickedNames.value.filter(n => n !== name) : [...pickedNames.value, name])
+const filtered = computed(() => pickedNames.value.length ? inRange.value.filter(b => pickedNames.value.includes(b.name)) : inRange.value)
 
 const total = computed(() => filtered.value.reduce((s, b) => s + b.amountCents, 0))
 const lastVisit = computed(() => filtered.value[0]?.addedOn)
@@ -60,7 +65,7 @@ const chartData = computed(() => {
   return bars.map(m => ({ month: m.month, label: monthLabel(m.month).replace(/^(\w{3})\w* (\d{2})(\d{2})$/, '$1 \'$3'), amount: m.cents / 100 }))
 })
 // Only worth showing when the search spans more than one name, e.g. "Costco - Blanket" and "Costco - Meds".
-const variants = computed(() => storeTotals(filtered.value).flatMap(s => s.variants).sort((a, b) => b.cents - a.cents))
+const variants = computed(() => storeTotals(inRange.value).flatMap(s => s.variants).sort((a, b) => b.cents - a.cents))
 
 const columns: TableColumn<Bill>[] = [
   { accessorKey: 'addedOn', header: 'Added', meta: { class: { td: 'order-4 max-md:text-xs' } } },
@@ -78,8 +83,8 @@ const columns: TableColumn<Bill>[] = [
         <h1 class="text-2xl font-semibold text-highlighted">
           {{ q ? `Results for "${q}"` : 'Search Bills' }}
         </h1>
-        <p class="text-sm text-muted">
-          {{ q ? 'Case, spaces and punctuation are ignored, so "foodlion" finds Food Lion.' : 'Use the search box in the header to find bills by name.' }}
+        <p v-if="!q" class="text-sm text-muted">
+          Use the search box in the header to find bills by name.
         </p>
       </div>
       <div v-if="q" class="flex flex-wrap items-center gap-3">
@@ -128,13 +133,30 @@ const columns: TableColumn<Bill>[] = [
         />
       </div>
       <div v-if="variants.length > 1" class="surface-card p-5 space-y-3 min-w-0">
-        <h2 class="font-semibold text-highlighted">
-          By Name
-        </h2>
-        <ul class="divide-y divide-default">
-          <li v-for="v in variants" :key="v.name" class="flex items-baseline justify-between gap-3 py-2 text-sm">
-            <span class="min-w-0 truncate"><b class="text-highlighted">{{ v.name }}</b><span class="text-muted"> · {{ v.visits }}</span></span>
-            <span class="font-semibold tabular-nums">{{ formatMoney(v.cents) }}</span>
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="font-semibold text-highlighted">
+            By Name
+          </h2>
+          <UButton v-if="pickedNames.length" size="xs" color="neutral" variant="soft" class="rounded-full" icon="i-lucide-x" @click="pickedNames = []">
+            Clear {{ pickedNames.length }}
+          </UButton>
+          <span v-else class="text-xs text-muted">Click names to narrow the page</span>
+        </div>
+        <ul class="space-y-0.5">
+          <li v-for="v in variants" :key="v.name">
+            <button
+              type="button"
+              class="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 -mx-2 text-left text-sm transition"
+              :class="pickedNames.includes(v.name) ? 'bg-primary/10 ring-1 ring-primary/30' : 'hover:bg-elevated/60'"
+              :aria-pressed="pickedNames.includes(v.name)"
+              @click="togglePicked(v.name)"
+            >
+              <span class="flex min-w-0 items-center gap-2">
+                <UIcon :name="pickedNames.includes(v.name) ? 'i-lucide-square-check' : 'i-lucide-square'" class="size-4 shrink-0" :class="pickedNames.includes(v.name) ? 'text-primary' : 'text-muted'" />
+                <span class="truncate"><b class="text-highlighted">{{ v.name }}</b><span class="text-muted"> · {{ v.visits }}</span></span>
+              </span>
+              <span class="font-semibold tabular-nums">{{ formatMoney(v.cents) }}</span>
+            </button>
           </li>
         </ul>
       </div>
