@@ -24,6 +24,28 @@ describe('insights', () => {
     expect(foodLion).toMatchObject({ key: 'foodlion', label: 'Food Lion', cents: 4000, visits: 2 })
   })
 
+  it('splits stores that share a first word, and joins reordered or plural names', () => {
+    const names = [
+      ...Array(4).fill("Lowe's Foods"), "Lowe's", 'Lowes - Filters', "Lowe's Mulch",
+      'Water', 'Water', 'Water Filter', 'Water filter & cleaner', 'Water Filter / Nozzle', ...Array(5).fill('Water/Trash'),
+      'Spectrum Internet', 'Spectrum Internet', 'Internet-Spectrum',
+      'St. George Subs', 'St. George Subs', 'St George Sub',
+      'The Pond Guy', 'The Fresh Market'
+    ]
+    const groups = storeTotals(names.map((n, i) => b(i, n, 100, '2026-10-01'))).map(s => s.variants.map(v => v.name).sort().join(' | ')).sort()
+    expect(groups).toEqual([
+      "Lowe's | Lowe's Mulch | Lowes - Filters",
+      "Lowe's Foods",
+      'Internet-Spectrum | Spectrum Internet',
+      'St George Sub | St. George Subs',
+      'The Fresh Market',
+      'The Pond Guy',
+      'Water',
+      'Water Filter | Water Filter / Nozzle | Water filter & cleaner',
+      'Water/Trash'
+    ].sort())
+  })
+
   it('totals months, including empty ones, and spacing between visits', () => {
     const bills = [b(1, 'A', 100, '2026-08-01'), b(2, 'A', 200, '2026-08-11'), b(3, 'A', 300, '2026-10-01')]
     expect(monthlyTotals(bills, ['2026-08', '2026-09', '2026-10']).map(m => m.cents)).toEqual([300, 0, 300])

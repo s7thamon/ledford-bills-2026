@@ -31,11 +31,59 @@ export function monthsBetween(from: string, to: string): string[] {
   return out
 }
 
+/** Words of the store part of a name: before " - ", lowercased, apostrophes and plural s dropped ("Lowe's", "Subs"). */
+const wordsOf = (name: string) => name.split(/\s+[-–—]\s+/)[0]!.toLowerCase().replace(/['’]/g, '').split(/[^a-z0-9]+/).filter(Boolean)
+  .map(w => w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)
+
 /**
- * Grouping key for a store: the part before " - ", ignoring case, spaces and punctuation.
- * "Costco - Blanket", "Costco - Meds" and "costco" are one store; so are "Food Lion" and "foodlion".
+ * Store key for every bill name, worked out from all the names together:
+ * - names pool under their shared leading words ("Amazon Prime", "Amazon (Sheets)" are Amazon),
+ * - the same words in another order are one name ("Internet-Spectrum", "Spectrum Internet"),
+ * - a sub-group with 3+ bills stays its own store when it is a third of its parent or outnumbers bills named just the parent
+ *   ("Lowes Foods" apart from "Lowe's Mulch", "Water Filter" apart from "Water"),
+ * - a fragment that is never a whole name doesn't pool ("The Pond Guy" stays apart from other "The ..." stores),
+ * - keys a letter or two apart merge, for plurals and possessives ("Jersey Mike", "Jersey Mikes").
  */
-export const storeOf = (name: string) => name.split(' - ')[0]!.toLowerCase().replace(/[^a-z0-9]/g, '')
+export function storeKeys(names: string[]): Map<string, string> {
+  const words = new Map(names.map(n => [n, wordsOf(n)]))
+  // Same words in any order take the most common order.
+  const orders = new Map<string, Map<string, number>>()
+  for (const n of names) {
+    const w = words.get(n)!
+    const sig = [...w].sort().join(' ')
+    const seen = orders.get(sig) ?? new Map<string, number>()
+    seen.set(w.join(' '), (seen.get(w.join(' ')) ?? 0) + 1)
+    orders.set(sig, seen)
+  }
+  for (const [n, w] of words) {
+    const best = [...orders.get([...w].sort().join(' '))!].sort((a, b) => b[1] - a[1])[0]![0]
+    words.set(n, best ? best.split(' ') : [])
+  }
+  const prefix = (w: string[], k: number) => w.slice(0, k).join('')
+  const counts = new Map<string, number>()
+  for (const w of names.map(n => words.get(n)!)) {
+    for (let k = 1; k <= w.length; k++) counts.set(prefix(w, k), (counts.get(prefix(w, k)) ?? 0) + 1)
+  }
+  const exact = new Map<string, number>()
+  for (const n of names) exact.set(words.get(n)!.join(''), (exact.get(words.get(n)!.join('')) ?? 0) + 1)
+  const keyOf = new Map<string, string>()
+  for (const [name, w] of words) {
+    if (!w.length) {
+      keyOf.set(name, name.toLowerCase())
+      continue
+    }
+    let k = 1
+    while (k < w.length) {
+      const next = counts.get(prefix(w, k + 1))!
+      if (next >= 3 && (next * 3 >= counts.get(prefix(w, k))! || next >= (exact.get(prefix(w, k)) ?? 0))) k++
+      else break
+    }
+    keyOf.set(name, k < w.length && !exact.has(prefix(w, k)) ? w.join('') : prefix(w, k))
+  }
+  const keys = [...new Set(keyOf.values())].sort((a, b) => a.length - b.length)
+  const merged = new Map(keys.map(k => [k, keys.find(p => p.length >= 4 && k !== p && k.startsWith(p) && k.length - p.length <= 2) ?? k]))
+  return new Map([...keyOf].map(([name, key]) => [name, merged.get(key)!]))
+}
 
 /** Text typed into search, reduced the same way, so "foodlion" finds "Food Lion". */
 export const searchKey = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -43,12 +91,10 @@ export const searchKey = (text: string) => text.toLowerCase().replace(/[^a-z0-9]
 export interface StoreTotal { key: string, label: string, cents: number, visits: number, variants: { name: string, cents: number, visits: number }[] }
 
 export function storeTotals(bills: InsightBill[]): StoreTotal[] {
-  // Older names have no " - " ("Costco Oil"), so a key starting with another store's key joins that store.
-  const keys = [...new Set(bills.map(b => storeOf(b.name)))].sort((a, b) => a.length - b.length)
-  const canonical = new Map(keys.map(k => [k, keys.find(p => p.length >= 4 && k.startsWith(p)) ?? k]))
+  const keyOf = storeKeys(bills.map(b => b.name))
   const stores = new Map<string, InsightBill[]>()
   for (const b of bills) {
-    const key = canonical.get(storeOf(b.name))!
+    const key = keyOf.get(b.name)!
     stores.set(key, [...(stores.get(key) ?? []), b])
   }
   return [...stores].map(([key, list]) => {
