@@ -126,12 +126,12 @@ async function act(key: string, url: string, success: string) {
 }
 
 const columns: TableColumn<Item>[] = [
-  { accessorKey: 'createdAt', header: 'Added' },
-  { accessorKey: 'name', header: 'Name', meta: { class: { td: 'min-w-56' } } },
-  { accessorKey: 'owedCents', header: 'Owed', meta: { class: { th: 'text-right', td: 'text-right' } } },
-  { id: 'flow', header: 'Who' },
-  { id: 'status', header: 'Status' },
-  { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { th: 'text-right', td: 'text-right' } } }
+  { accessorKey: 'createdAt', header: 'Added', meta: { class: { td: 'order-4 max-md:text-xs' } } },
+  { accessorKey: 'name', header: 'Name', meta: { class: { td: 'min-w-56 order-1 max-md:flex-1' } } },
+  { accessorKey: 'owedCents', header: 'Owed', meta: { class: { th: 'text-right', td: 'text-right order-2' } } },
+  { id: 'flow', header: 'Who', meta: { class: { td: 'order-5' } } },
+  { id: 'status', header: 'Status', meta: { class: { td: 'order-7' } } },
+  { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { th: 'text-right', td: 'text-right order-7 max-md:ms-auto' } } }
 ]
 
 const editOpen = ref(false)
@@ -211,6 +211,7 @@ function openEdit(item: Item) {
       </div>
 
       <UTable
+        class="stack-table"
         :data="data.items"
         :columns="columns"
         :loading="status === 'pending'"

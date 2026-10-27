@@ -27,7 +27,19 @@ export default defineNuxtConfig({
     head: {
       title: 'Ledford Bills',
       titleTemplate: 'Bills - %s',
-      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'manifest', href: '/manifest.webmanifest' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' }
+      ],
+      // Installed from the home screen it opens full screen, like an app.
+      meta: [
+        { name: 'theme-color', content: '#0ea5e9' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-title', content: 'Bills' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }
+      ]
     }
   },
 

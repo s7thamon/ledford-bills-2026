@@ -55,14 +55,14 @@ async function setActive(item: Item, active: boolean) {
 const monthlyTotal = computed(() => items.value.filter(i => i.active && i.type === 'bill').reduce((s, i) => s + i.amountCents, 0))
 
 const columns: TableColumn<Item>[] = [
-  { accessorKey: 'dayOfMonth', header: 'Day' },
-  { accessorKey: 'name', header: 'Name', meta: { class: { td: 'min-w-56' } } },
-  { accessorKey: 'type', header: 'Type' },
-  { accessorKey: 'amountCents', header: 'Amount', meta: { class: { th: 'text-right', td: 'text-right' } } },
-  { id: 'split', header: 'Split / Owed by' },
-  { accessorKey: 'active', header: 'Active', meta: { class: { th: 'text-center', td: 'text-center' } } },
-  { id: 'order', header: 'Same-day order', meta: { class: { th: 'text-center', td: 'text-center' } } },
-  { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { td: 'w-px' } } }
+  { accessorKey: 'dayOfMonth', header: 'Day', meta: { class: { td: 'order-4 max-md:text-xs' }, style: { td: { '--label': '"Day"' } } } },
+  { accessorKey: 'name', header: 'Name', meta: { class: { td: 'min-w-56 order-1 max-md:flex-1' } } },
+  { accessorKey: 'type', header: 'Type', meta: { class: { td: 'order-5 max-md:text-xs' } } },
+  { accessorKey: 'amountCents', header: 'Amount', meta: { class: { th: 'text-right', td: 'text-right order-2' } } },
+  { id: 'split', header: 'Split / Owed by', meta: { class: { td: 'order-5 max-md:text-xs' } } },
+  { accessorKey: 'active', header: 'Active', meta: { class: { th: 'text-center', td: 'text-center order-7' } } },
+  { id: 'order', header: 'Same-day order', meta: { class: { th: 'text-center', td: 'text-center order-7' } } },
+  { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { td: 'w-px order-2' } } }
 ]
 
 const editOpen = ref(false)
@@ -102,7 +102,7 @@ function openEdit(item: Item) {
     </div>
 
     <div class="surface-card overflow-hidden">
-      <UTable :data="items" :columns="columns" :loading="status === 'pending'" sticky empty="No recurring bills yet." :meta="{ class: { tr: (row) => rowClass(row.original) } }">
+      <UTable class="stack-table" :data="items" :columns="columns" :loading="status === 'pending'" sticky empty="No recurring bills yet." :meta="{ class: { tr: (row) => rowClass(row.original) } }">
         <template #name-cell="{ row }">
           <span class="font-semibold text-highlighted">{{ row.original.name }}</span>
         </template>

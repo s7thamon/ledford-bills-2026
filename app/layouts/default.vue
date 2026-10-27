@@ -79,9 +79,9 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
           <AppLogo class="size-8" />
           Ledford Bills
         </NuxtLink>
-        <UNavigationMenu :items="nav" variant="link" class="hidden lg:flex" :ui="{ link: 'rounded-full px-3 py-2 data-active:bg-primary/10' }">
+        <UNavigationMenu :items="nav" variant="link" class="hidden lg:flex" :ui="{ link: 'rounded-full px-3 py-2 data-active:bg-primary/10', viewport: 'sm:w-72' }">
           <template #history-content>
-            <ul class="grid w-64 gap-0.5 p-2">
+            <ul class="grid gap-0.5 p-2">
               <li v-for="m in historyMonths" :key="m">
                 <NavigationMenuLink as-child>
                   <ULink :to="{ path: '/', query: { month: m } }" class="flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm text-default hover:bg-elevated/70 transition-colors" active-class="text-primary font-medium">

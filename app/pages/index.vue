@@ -154,13 +154,13 @@ const banks = [
 const footerMoney = (cents: number) => rows.value.length ? h('span', { class: 'text-highlighted tabular-nums' }, formatMoney(cents)) : ''
 
 const columns = computed<TableColumn<Bill>[]>(() => [
-  { accessorKey: 'addedOn', header: 'Added' },
-  { accessorKey: 'name', header: 'Name', footer: () => rows.value.length ? `Total · ${rows.value.length} bill${rows.value.length === 1 ? '' : 's'}` : '', meta: { class: { td: 'min-w-64' } } },
-  { accessorKey: 'amountCents', header: 'Amount', footer: () => footerMoney(total(rows.value)), meta: { class: { th: 'text-right', td: 'text-right' } } },
-  { id: 'share', header: 'Each', footer: () => footerMoney(rows.value.reduce((sum, b) => sum + share(b), 0)), meta: { class: { th: 'text-right', td: 'text-right' } } },
-  ...users.value.map(u => ({ id: `paid_${u.id}`, header: u.name.split(' ')[0], meta: { class: { th: 'text-center', td: 'text-center' } } })),
-  { id: 'card', header: 'Card', footer: () => h('div', { class: 'flex justify-center gap-1' }, banks.map(bank => h(UTooltip, { text: bank.label, delayDuration: 0, content: { side: 'top' } }, () => h('a', { href: bank.url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': bank.label, class: 'inline-flex size-8 items-center justify-center rounded-full hover:bg-elevated transition' }, [h('img', { src: bank.icon, alt: '', class: 'size-5 rounded-sm' })])))), meta: { class: { th: 'text-center', td: 'text-center' } } },
-  { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { td: 'w-px' } } }
+  { accessorKey: 'addedOn', header: 'Added', meta: { class: { td: 'order-4 max-md:text-xs' } } },
+  { accessorKey: 'name', header: 'Name', footer: () => rows.value.length ? `Total · ${rows.value.length} bill${rows.value.length === 1 ? '' : 's'}` : '', meta: { class: { td: 'min-w-64 order-1 max-md:flex-1' } } },
+  { accessorKey: 'amountCents', header: 'Amount', footer: () => footerMoney(total(rows.value)), meta: { class: { th: 'text-right', td: 'text-right order-2' } } },
+  { id: 'share', header: 'Each', footer: () => footerMoney(rows.value.reduce((sum, b) => sum + share(b), 0)), meta: { class: { th: 'text-right', td: 'text-right order-5 max-md:text-xs' }, style: { td: { '--label': '"Each"' } } } },
+  ...users.value.map(u => ({ id: `paid_${u.id}`, header: u.name.split(' ')[0], meta: { class: { th: 'text-center', td: 'text-center order-7' }, style: { td: { '--label': `"${u.name.split(' ')[0]}"` } } } })),
+  { id: 'card', header: 'Card', footer: () => h('div', { class: 'flex justify-center gap-1' }, banks.map(bank => h(UTooltip, { text: bank.label, delayDuration: 0, content: { side: 'top' } }, () => h('a', { href: bank.url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': bank.label, class: 'inline-flex size-8 items-center justify-center rounded-full hover:bg-elevated transition' }, [h('img', { src: bank.icon, alt: '', class: 'size-5 rounded-sm' })])))), meta: { class: { th: 'text-center', td: 'text-center order-7' }, style: { td: { '--label': '"Card"' } } } },
+  { id: 'actions', header: () => h('span', { class: 'sr-only' }, 'Actions'), meta: { class: { td: 'w-px order-2' } } }
 ])
 
 // Create
@@ -369,6 +369,7 @@ function openEdit(bill: Bill) {
       </div>
 
     <UTable
+      class="stack-table"
       :data="rows"
       :columns="columns"
       :loading="status === 'pending'"
