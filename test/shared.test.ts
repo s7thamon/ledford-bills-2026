@@ -2,21 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { formatMoney, moneyNumber, parseAmount } from '../shared/utils/money'
 import { equalShare, isCustomSplit, splitAmounts } from '../shared/utils/split'
 import { daysInMonth, monthRange, ordinalDay, shiftMonth, todayIso, usDotDate } from '../shared/utils/dates'
-import { canDeleteBill, canEditBill, canMarkCardPaid, canMarkTransferComplete, canMarkReimbursementComplete, reimbursementStatus } from '../shared/utils/rules'
+import { canAdminDeleteBill, canDeleteBill, canEditAmounts, canEditBill, canMarkCardPaid, canMarkTransferComplete, canMarkReimbursementComplete, canRemoveCredit, canTakeCredit, isDirectPayName, reimbursementStatus } from '../shared/utils/rules'
 import { billInTab, filterSuggestions, isBillTab, readyForCardCents, tabCounts } from '../shared/utils/bill-view'
-import { canAbsorb, cardDue, shareDue, splitRefund } from '../shared/utils/credits'
+import { cardDue, creditFromPieces, poolsFromRefunds, settlement, shareDue, sizeBite, splitRefund } from '../shared/utils/credits'
 import { cardUnpaidCents } from '../shared/utils/bill-view'
 
 describe('different card and credits in rules', () => {
   const p = (userId: number, paid: boolean) => ({ userId, amountCents: 500, paidAt: paid ? '2026-10-01' : null })
-  const personal = { amountCents: 1000, cardPaidAt: null, paidWithCardOf: 1, participants: [p(1, true), p(2, true)] }
   const credited = { amountCents: 32000, cardPaidAt: null, credit: { amountCents: 30000, shares: { 1: 15000, 2: 15000 } }, participants: [p(1, true), p(2, true)] }
-  it('never offers the card for a different-card bill', () => {
-    expect(canMarkCardPaid(personal)).toBe(false)
-    expect(billInTab(personal, 'ready', 1)).toBe(false)
-    expect(billInTab(personal, 'card', 1)).toBe(false)
-    expect(cardUnpaidCents([personal])).toBe(0)
-  })
   it('treats a check bill as off the card', () => {
     const check = { amountCents: 1000, cardPaidAt: null, paidByCheck: true, participants: [p(1, true), p(2, true)] }
     expect(canMarkCardPaid(check)).toBe(false)
@@ -41,11 +34,66 @@ describe('credits', () => {
     const odd = splitRefund(1001, [{ userId: 1, amountCents: 3334 }, { userId: 2, amountCents: 6667 }])
     expect(odd[1]! + odd[2]!).toBe(1001)
   })
-  it('checks a bill can absorb a credit', () => {
-    const credit = { amountCents: 30000, shares: { 1: 15000, 2: 15000 } }
-    expect(canAbsorb({ amountCents: 32000, participants: [{ userId: 1, amountCents: 16000 }, { userId: 2, amountCents: 16000 }] }, credit)).toBe(true)
-    expect(canAbsorb({ amountCents: 32000, participants: [{ userId: 1, amountCents: 32000 }, { userId: 2, amountCents: 0 }] }, credit)).toBe(false)
-    expect(canAbsorb({ amountCents: 29999, participants: [{ userId: 1, amountCents: 15000 }, { userId: 2, amountCents: 15000 }] }, credit)).toBe(false)
+  const pool = (refundId: number, sourceBillId: number, a: number, b: number) => ({ refundId, sourceBillId, left: { 1: a, 2: b } })
+  const bill = (id: number, amountCents: number, a: number, b: number) => ({ id, amountCents, participants: [{ userId: 1, amountCents: a }, { userId: 2, amountCents: b }] })
+  it('bites the whole bill while credit lasts', () => {
+    expect(sizeBite(bill(9, 21248, 10624, 10624), [pool(1, 5, 150000, 150000)]))
+      .toEqual([{ refundId: 1, userId: 1, amountCents: 10624 }, { refundId: 1, userId: 2, amountCents: 10624 }])
+  })
+  it('takes only what is left', () => {
+    expect(creditFromPieces(sizeBite(bill(9, 20000, 10000, 10000), [pool(1, 5, 4500, 4500)])))
+      .toEqual({ amountCents: 9000, shares: { 1: 4500, 2: 4500 } })
+  })
+  it('spans refunds oldest first', () => {
+    expect(sizeBite(bill(9, 20000, 10000, 10000), [pool(1, 5, 3000, 3000), pool(2, 6, 50000, 50000)])).toEqual([
+      { refundId: 1, userId: 1, amountCents: 3000 }, { refundId: 2, userId: 1, amountCents: 7000 },
+      { refundId: 1, userId: 2, amountCents: 3000 }, { refundId: 2, userId: 2, amountCents: 7000 }])
+  })
+  it('uneven credit bites only its owner', () => {
+    expect(creditFromPieces(sizeBite(bill(9, 20000, 10000, 10000), [pool(1, 5, 30000, 0)])).shares).toEqual({ 1: 10000 })
+  })
+  it('caps the card at the bill amount when shares round up', () => {
+    const c = creditFromPieces(sizeBite(bill(9, 5999, 3000, 3000), [pool(1, 5, 150000, 150000)]))
+    expect(c.amountCents).toBe(5999)
+    expect(c.shares).toEqual({ 1: 3000, 2: 2999 })
+  })
+  it('never bites a bill from its own refund', () => {
+    expect(sizeBite(bill(5, 20000, 10000, 10000), [pool(1, 5, 9000, 9000)])).toEqual([])
+  })
+  it('orders pools oldest first and skips used-up refunds', () => {
+    const r = (id: number, refundedOn: string, leftCents: number) => ({ id, billId: 5, refundedOn, left: { 1: leftCents / 2, 2: leftCents / 2 }, leftCents })
+    expect(poolsFromRefunds([r(3, '2026-10-12', 100), r(2, '2026-10-12', 100), r(1, '2026-09-01', 0), r(4, '2026-08-01', 50)]).map(p => p.refundId)).toEqual([4, 2, 3])
+  })
+  it('settles a deleted bill', () => {
+    const credit = { amountCents: 5000, shares: { 1: 2500, 2: 2500 } }
+    const ps = (aPaid: boolean, bPaid: boolean) => [{ userId: 1, amountCents: 10000, paidAt: aPaid ? 'x' : null }, { userId: 2, amountCents: 10000, paidAt: bPaid ? 'x' : null }]
+    expect(settlement({ amountCents: 20000, participants: ps(true, true), credit })).toEqual({
+      deposits: [{ userId: 1, cents: 7500 }, { userId: 2, cents: 7500 }], receivedCents: 15000, creditCents: 5000,
+      adds: [{ userId: 1, cents: 2500 }, { userId: 2, cents: 2500 }], withdrawCents: 20000 })
+    expect(settlement({ amountCents: 20000, participants: ps(false, true), credit })).toMatchObject({
+      receivedCents: 7500, adds: [{ userId: 1, cents: 10000 }, { userId: 2, cents: 2500 }] })
+    expect(settlement({ amountCents: 20000, participants: ps(true, true) })).toMatchObject({ receivedCents: 20000, creditCents: 0, adds: [] })
+  })
+  it('credit rules', () => {
+    const p = (userId: number, paid: boolean) => ({ userId, amountCents: 500, paidAt: paid ? 'x' : null })
+    const fresh = { amountCents: 1000, cardPaidAt: null, participants: [p(1, false), p(2, false)] }
+    expect(canTakeCredit(fresh, false)).toBe(true)
+    expect(canTakeCredit(fresh, true)).toBe(false)
+    expect(canTakeCredit({ ...fresh, paidByCheck: true }, false)).toBe(false)
+    const covered = { ...fresh, credit: { amountCents: 1000, shares: { 1: 500, 2: 500 } }, participants: [p(1, true), p(2, true)] }
+    expect(canTakeCredit(covered, false)).toBe(false)
+    expect(canRemoveCredit(covered)).toBe(true)
+    expect(canEditAmounts(covered)).toBe(true)
+    expect(canRemoveCredit({ ...covered, refunds: [{ amountCents: 1000 }] })).toBe(false)
+    expect(canEditAmounts({ ...covered, refunds: [{ amountCents: 1000 }] })).toBe(false)
+    const paid = { ...fresh, participants: [p(1, true), p(2, true)] }
+    expect(canAdminDeleteBill(fresh, false)).toBe(false)
+    expect(canAdminDeleteBill(paid, false)).toBe(true)
+    expect(canAdminDeleteBill(paid, true)).toBe(false)
+    expect(canAdminDeleteBill({ ...paid, cardPaidAt: 'x' }, false)).toBe(false)
+    expect(canAdminDeleteBill({ ...paid, paidByCheck: true }, false)).toBe(false)
+    expect(isDirectPayName('ledford mortgage', ['Ledford Mortgage'])).toBe(true)
+    expect(isDirectPayName('Netflix', ['Ledford Mortgage'])).toBe(false)
   })
   it('computes amounts due after a credit', () => {
     const credit = { amountCents: 30000, shares: { 1: 15000, 2: 15000 } }
