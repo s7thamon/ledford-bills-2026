@@ -18,6 +18,7 @@ describe('reimbursements', () => {
     expect(await names('conc')).toEqual(['Concert'])
     expect(await names('$26.8')).toEqual(['Concert'])
     expect(await names('12.34')).toEqual(['Gas'])
+    expect((await listReimbursements({ resolved: false, page: 1, sort: 'name', dir: 'asc' })).openOwedTo).toEqual({ [tim]: 3914 })
   })
 
   it('assigns the other user and emails both sides', async () => {

@@ -20,13 +20,13 @@ const { data: users } = await useFetch('/api/users', { key: 'users', default: ()
 const { data, refresh, status } = await useFetch('/api/reimbursements', {
   key: 'reimbursements',
   query: computed(() => ({ resolved: resolved.value, page: page.value, sort: sort.value, dir: dir.value, q: search.value.trim() || undefined })),
-  default: () => ({ items: [], total: 0, pageSize: 10 })
+  default: () => ({ items: [], total: 0, pageSize: 10, openOwedTo: {} as Record<number, number> })
 })
 // Count for the inactive tab; the active tab's count is data.total.
 const { data: other, refresh: refreshOther } = await useFetch('/api/reimbursements', {
   key: 'reimbursements-other',
   query: computed(() => ({ resolved: !resolved.value, page: 1, q: search.value.trim() || undefined })),
-  default: () => ({ items: [], total: 0, pageSize: 10 })
+  default: () => ({ items: [], total: 0, pageSize: 10, openOwedTo: {} as Record<number, number> })
 })
 // Live updates only refresh the 'reimbursements' key, so follow the active list to keep this count current.
 watch(data, () => refreshOther())
@@ -36,6 +36,35 @@ const tabItems = computed(() => [
   { label: 'All', value: 'all', badge: resolved.value ? data.value.total : other.value.total }
 ].map(item => ({ ...item, badge: { label: String(item.badge), size: 'sm' as const, color: ((item.value === 'all') === resolved.value ? 'primary' : 'neutral') as 'primary' | 'neutral', variant: 'soft' as const } })))
 type Item = (typeof data.value.items)[number]
+
+// Selection, like Bills: totals switch to the selected rows and become copyable.
+const selected = ref<number[]>([])
+watch(data, () => (selected.value = selected.value.filter(id => data.value.items.some(i => i.id === id))))
+const toggleSelected = (id: number) => (selected.value = selected.value.includes(id) ? selected.value.filter(x => x !== id) : [...selected.value, id])
+const stats = computed(() => {
+  const name = otherUser.value?.name.split(' ')[0] ?? 'They'
+  if (selected.value.length) {
+    const rows = data.value.items.filter(i => selected.value.includes(i.id))
+    const sum = (list: Item[]) => list.reduce((s, i) => s + i.owedCents, 0)
+    return [
+      { title: 'Selected Total', icon: 'i-lucide-receipt-text', cents: sum(rows) },
+      { title: `Selected ${name} Owes You`, icon: 'i-lucide-arrow-down-left', cents: sum(rows.filter(i => i.createdBy === me.value)) },
+      { title: `Selected You Owe ${name}`, icon: 'i-lucide-arrow-up-right', cents: sum(rows.filter(i => i.createdBy !== me.value)) }
+    ]
+  }
+  const owed = data.value.openOwedTo
+  const toMe = owed[me.value] ?? 0
+  const all = Object.values(owed).reduce((s, c) => s + c, 0)
+  return [
+    { title: 'Open Total', icon: 'i-lucide-receipt-text', cents: all },
+    { title: `${name} Owes You`, icon: 'i-lucide-arrow-down-left', cents: toMe },
+    { title: `You Owe ${name}`, icon: 'i-lucide-arrow-up-right', cents: all - toMe }
+  ]
+})
+async function copy(cents: number) {
+  await navigator.clipboard.writeText(moneyNumber(cents))
+  toast.add({ title: `Copied ${moneyNumber(cents)}`, icon: 'i-lucide-clipboard-check' })
+}
 
 const firstName = (id: number) => users.value.find(u => u.id === id)?.name.split(' ')[0] ?? 'Someone'
 const otherUser = computed(() => users.value.find(u => u.id !== me.value))
@@ -134,6 +163,32 @@ function openEdit(item: Item) {
       </form>
     </div>
 
+    <div class="grid gap-5 sm:grid-cols-3">
+      <component
+        :is="selected.length ? 'button' : 'div'"
+        v-for="stat in stats"
+        :key="stat.title"
+        :type="selected.length ? 'button' : undefined"
+        class="surface-card flex items-center gap-4 px-6 py-5 text-left"
+        :class="selected.length && 'cursor-pointer transition ring-2 ring-primary/30 hover:bg-primary/5'"
+        :title="selected.length ? 'Copy amount' : undefined"
+        @click="selected.length && copy(stat.cents)"
+      >
+        <div class="icon-tile">
+          <UIcon :name="stat.icon" class="size-5" />
+        </div>
+        <div class="min-w-0">
+          <div class="text-sm font-medium text-toned flex items-center gap-1">
+            {{ stat.title }}
+            <UIcon v-if="selected.length" name="i-lucide-copy" class="size-3.5" />
+          </div>
+          <div class="text-[1.625rem] leading-tight font-bold text-highlighted tabular-nums">
+            {{ formatMoney(stat.cents) }}
+          </div>
+        </div>
+      </component>
+    </div>
+
     <div class="surface-card overflow-hidden">
       <div class="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-default">
         <UTabs
@@ -146,10 +201,23 @@ function openEdit(item: Item) {
           :ui="{ list: 'bg-transparent p-0 gap-1', trigger: 'rounded-full px-3.5 py-1.5 font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none before:hidden', indicator: 'hidden' }"
           @update:model-value="v => (resolved = v === 'all')"
         />
-        <UInput v-model="search" icon="i-lucide-search" placeholder="Search Reimbursements" aria-label="Search reimbursements by name or amount" size="sm" class="w-48 ms-auto" />
+        <template v-if="selected.length">
+          <span class="text-sm text-muted ms-auto">{{ selected.length }} selected</span>
+          <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="selected = []">
+            Clear
+          </UButton>
+        </template>
+        <UInput v-else v-model="search" icon="i-lucide-search" placeholder="Search Reimbursements" aria-label="Search reimbursements by name or amount" size="sm" class="w-48 ms-auto" />
       </div>
 
-      <UTable :data="data.items" :columns="columns" :loading="status === 'pending'" empty="Nothing waiting. All settled up.">
+      <UTable
+        :data="data.items"
+        :columns="columns"
+        :loading="status === 'pending'"
+        empty="Nothing waiting. All settled up."
+        :meta="{ class: { tr: (row) => selected.includes(row.original.id) ? 'bg-primary/10!' : '' } }"
+        @select="(_e, row) => toggleSelected(row.original.id)"
+      >
         <template #createdAt-header>
           <UButton color="neutral" variant="link" class="-mx-2.5 font-semibold" :trailing-icon="sortIcon('createdAt')" label="Added" @click="sortBy('createdAt')" />
         </template>
@@ -189,7 +257,7 @@ function openEdit(item: Item) {
           </UBadge>
         </template>
         <template #actions-cell="{ row }">
-          <div class="inline-flex items-center gap-1">
+          <div class="inline-flex items-center gap-1" @click.stop>
             <UButton
               v-if="canSend(row.original)"
               size="sm"

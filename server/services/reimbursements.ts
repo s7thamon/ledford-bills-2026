@@ -34,13 +34,17 @@ export async function listReimbursements(opts: { resolved: boolean, page: number
         ? sql`${statusRank} ${sql.raw(opts.dir)}`
         : order(reimbursements.createdAt)
 
-  const [items, [totals]] = await Promise.all([
+  const [items, [totals], open] = await Promise.all([
     db.select().from(reimbursements).where(where)
       .orderBy(primary, desc(reimbursements.createdAt), desc(reimbursements.id))
       .limit(PAGE_SIZE).offset((opts.page - 1) * PAGE_SIZE),
-    db.select({ n: count() }).from(reimbursements).where(where)
+    db.select({ n: count() }).from(reimbursements).where(where),
+    // Everything still open across every page, keyed by who is owed.
+    db.select({ createdBy: reimbursements.createdBy, cents: sql<string>`sum(${reimbursements.owedCents})` })
+      .from(reimbursements).where(isNull(reimbursements.completedAt)).groupBy(reimbursements.createdBy)
   ])
-  return { items, total: totals?.n ?? 0, pageSize: PAGE_SIZE }
+  const openOwedTo = Object.fromEntries(open.map(r => [r.createdBy, Number(r.cents)])) as Record<number, number>
+  return { items, total: totals?.n ?? 0, pageSize: PAGE_SIZE, openOwedTo }
 }
 
 export async function createReimbursement(input: {
