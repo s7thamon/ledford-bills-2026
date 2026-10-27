@@ -82,7 +82,7 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
           <AppLogo class="size-8" />
           Ledford Bills
         </NuxtLink>
-        <UNavigationMenu :items="nav" variant="link" class="hidden lg:flex" :ui="{ link: 'rounded-full px-3 py-2 data-active:bg-primary/10', viewport: 'sm:w-72' }">
+        <UNavigationMenu :items="nav" variant="link" class="hidden lg:flex" :viewport="{ align: 'start' }" :ui="{ link: 'rounded-full px-3 py-2 data-active:bg-primary/10', viewportWrapper: 'justify-start', viewport: 'sm:w-72 left-(--reka-navigation-menu-viewport-left)' }">
           <template #history-content>
             <ul class="grid gap-0.5 p-2">
               <li v-for="m in historyMonths" :key="m">
