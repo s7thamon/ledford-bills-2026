@@ -94,6 +94,8 @@ describe('bills', () => {
     expect(await billNameSuggestions()).toEqual(['Food Lion'])
     expect((await searchBills('food')).length).toBe(2)
     expect((await searchBills('%')).map(b => b.name)).toEqual(['100% Juice'])
+    expect((await searchBills('foodlion')).length).toBe(2)
+    expect((await searchBills('100 juice')).map(b => b.name)).toEqual(['100% Juice'])
     expect(await searchBills('  ')).toEqual([])
   })
 })

@@ -25,7 +25,8 @@ const nav = computed<NavigationMenuItem[]>(() => [
   },
   { label: 'Recurring', icon: 'i-lucide-repeat', to: '/recurring' },
   { label: 'Reimbursements', icon: 'i-lucide-arrow-left-right', to: '/reimbursements' },
-  { label: 'Reconcile', icon: 'i-lucide-scale', to: '/reconcile' }
+  { label: 'Reconcile', icon: 'i-lucide-scale', to: '/reconcile' },
+  { label: 'Insights', icon: 'i-lucide-chart-column', to: '/insights' }
 ])
 
 const colorMode = useColorMode()

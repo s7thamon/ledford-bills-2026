@@ -6,6 +6,7 @@ import { splitAmounts } from '../../shared/utils/split'
 import { allParticipantsPaid, canDeleteBill, canEditAmounts, canMarkCardPaid, canMarkParticipantPaid } from '../../shared/utils/rules'
 import { cardDue } from '../../shared/utils/credits'
 import type { ReconcileBill, ReconcileRefund } from '../../shared/utils/reconcile'
+import { searchKey, type InsightBill } from '../../shared/utils/insights'
 import * as notify from './notify'
 import { getDirectPayNames } from './settings'
 
@@ -116,14 +117,24 @@ export async function searchBills(q: string): Promise<BillDto[]> {
   const term = q.trim()
   if (!term) return []
   const escaped = term.replace(/[\\%_]/g, c => `\\${c}`)
+  const key = searchKey(term)
   const rows = await useDb().query.bills.findMany({
-    where: like(bills.name, `%${escaped}%`),
+    // Also match with case, spaces and punctuation ignored, so "foodlion" finds "Food Lion".
+    where: or(like(bills.name, `%${escaped}%`), key ? sql`regexp_replace(lower(${bills.name}), '[^a-z0-9]', '') like ${`%${key}%`}` : undefined),
     columns: billColumns,
     with: withParticipants,
     orderBy: [desc(bills.addedOn), desc(bills.id)],
     limit: 500
   })
   return rows.map(toDto)
+}
+
+/** Every bill added in a range of months, slim, for the Insights page. */
+export async function billsForInsights(fromMonth: string, toMonth: string): Promise<InsightBill[]> {
+  return useDb().select({ id: bills.id, name: bills.name, amountCents: bills.amountCents, addedOn: bills.addedOn })
+    .from(bills)
+    .where(between(bills.addedOn, monthRange(fromMonth)[0], monthRange(toMonth)[1]))
+    .orderBy(asc(bills.addedOn), asc(bills.id))
 }
 
 /** Names used more than once, most common first. */
