@@ -1,34 +1,37 @@
 import { and, asc, between, count, desc, eq, gt, inArray, isNull, like, notInArray, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
-import { schema, useDb } from '../db/client'
+import { schema, useDb, type Db } from '../db/client'
 import { todayIso, monthRange } from '../../shared/utils/dates'
 import { splitAmounts } from '../../shared/utils/split'
-import { allParticipantsPaid, canDeleteBill, canEditAmounts, canMarkCardPaid, canMarkParticipantPaid } from '../../shared/utils/rules'
-import { cardDue } from '../../shared/utils/credits'
+import { allParticipantsPaid, canDeleteBill, canEditAmounts, canMarkCardPaid, canMarkParticipantPaid, canRemoveCredit, isDirectPayName } from '../../shared/utils/rules'
+import { cardDue, creditFromPieces, shareDue, type CreditLike } from '../../shared/utils/credits'
 import type { ReconcileBill, ReconcileRefund } from '../../shared/utils/reconcile'
 import { searchKey, type InsightBill } from '../../shared/utils/insights'
 import * as notify from './notify'
 import { getDirectPayNames } from './settings'
 
-const { bills, billParticipants, refunds, users } = schema
+const { bills, billParticipants, creditUses, refunds, users } = schema
 
-export interface BillCredit {
+/** One refund a bill's credit came from, and the pieces it took. */
+export interface CreditSource {
   refundId: number
-  amountCents: number
-  shares: Record<number, number>
   sourceBillId: number
   sourceName: string
   sourceAddedOn: string
   refundedOn: string
+  amountCents: number
+  shares: Record<number, number>
 }
+
+/** The refund credit a bill used: totals, plus where each piece came from. */
+export type BillCredit = CreditLike & { sources: CreditSource[] }
 
 export interface BillRefund {
   id: number
   amountCents: number
   refundedOn: string
-  appliedToBillId: number | null
-  appliedToName: string | null
-  appliedToAddedOn: string | null
+  /** Bills that used this refund's credit, oldest first. */
+  uses: { billName: string, billAddedOn: string, amountCents: number }[]
 }
 
 export interface BillDto {
@@ -39,10 +42,9 @@ export interface BillDto {
   cardPaidAt: Date | null
   recurringBillId: number | null
   createdBy: number
-  paidWithCardOf: number | null
   paidByCheck: boolean
   participants: { userId: number, amountCents: number, paidAt: Date | null }[]
-  /** The refund credit this bill absorbed, if any (at most one). */
+  /** The refund credit this bill used, if any. */
   credit: BillCredit | null
   /** Refunds recorded against this bill. */
   refunds: BillRefund[]
@@ -51,16 +53,17 @@ export interface BillDto {
 const withParticipants = {
   participants: { columns: { userId: true, amountCents: true, paidAt: true }, orderBy: asc(billParticipants.userId) },
   refunds: {
-    columns: { id: true, amountCents: true, refundedOn: true, appliedToBillId: true },
+    columns: { id: true, amountCents: true, refundedOn: true },
     orderBy: asc(refunds.id),
-    with: { appliedTo: { columns: { name: true, addedOn: true } } }
+    with: { uses: { columns: { billId: true, amountCents: true }, orderBy: asc(creditUses.id), with: { bill: { columns: { name: true, addedOn: true } } } } }
   },
-  appliedCredits: {
-    columns: { id: true, amountCents: true, refundedOn: true, billId: true },
-    with: { shares: { columns: { userId: true, amountCents: true } }, bill: { columns: { name: true, addedOn: true } } }
+  creditUses: {
+    columns: { refundId: true, userId: true, amountCents: true },
+    orderBy: asc(creditUses.id),
+    with: { refund: { columns: { billId: true, refundedOn: true }, with: { bill: { columns: { name: true, addedOn: true } } } } }
   }
 } as const
-const billColumns = { id: true, name: true, amountCents: true, addedOn: true, cardPaidAt: true, recurringBillId: true, createdBy: true, paidWithCardOf: true, paidByCheck: true } as const
+const billColumns = { id: true, name: true, amountCents: true, addedOn: true, cardPaidAt: true, recurringBillId: true, createdBy: true, paidByCheck: true } as const
 
 type BillRow = NonNullable<Awaited<ReturnType<typeof findBill>>>
 
@@ -68,30 +71,40 @@ function findBill(id: number) {
   return useDb().query.bills.findFirst({ where: eq(bills.id, id), columns: billColumns, with: withParticipants })
 }
 
-function toDto({ refunds: refundRows, appliedCredits, ...bill }: BillRow): BillDto {
-  const applied = appliedCredits[0]
+function toDto({ refunds: refundRows, creditUses: pieces, ...bill }: BillRow): BillDto {
+  const sources = new Map<number, CreditSource>()
+  for (const x of pieces) {
+    const src = sources.get(x.refundId) ?? { refundId: x.refundId, sourceBillId: x.refund.billId, sourceName: x.refund.bill.name, sourceAddedOn: x.refund.bill.addedOn, refundedOn: x.refund.refundedOn, amountCents: 0, shares: {} }
+    src.amountCents += x.amountCents
+    src.shares[x.userId] = (src.shares[x.userId] ?? 0) + x.amountCents
+    sources.set(x.refundId, src)
+  }
   return {
     ...bill,
-    credit: applied
-      ? {
-          refundId: applied.id,
-          amountCents: applied.amountCents,
-          shares: Object.fromEntries(applied.shares.map(s => [s.userId, s.amountCents])),
-          sourceBillId: applied.billId,
-          sourceName: applied.bill.name,
-          sourceAddedOn: applied.bill.addedOn,
-          refundedOn: applied.refundedOn
-        }
-      : null,
+    credit: pieces.length ? { ...creditFromPieces(pieces), sources: [...sources.values()].sort((a, b) => a.refundedOn.localeCompare(b.refundedOn) || a.refundId - b.refundId) } : null,
     refunds: refundRows.map(r => ({
       id: r.id,
       amountCents: r.amountCents,
       refundedOn: r.refundedOn,
-      appliedToBillId: r.appliedToBillId,
-      appliedToName: r.appliedTo?.name ?? null,
-      appliedToAddedOn: r.appliedTo?.addedOn ?? null
+      uses: [...r.uses.reduce((byBill, u) => {
+        const use = byBill.get(u.billId) ?? { billName: u.bill.name, billAddedOn: u.bill.addedOn, amountCents: 0 }
+        use.amountCents += u.amountCents
+        return byBill.set(u.billId, use)
+      }, new Map<number, BillRefund['uses'][number]>()).values()]
     }))
   }
+}
+
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
+
+/** Send a bill's credit back to unused, unmarking shares that were only "paid" because the credit covered them. */
+export async function releaseCredit(tx: Tx, bill: BillDto) {
+  if (!bill.credit) return
+  const covered = bill.participants.filter(p => p.paidAt && shareDue(p, bill.credit) === 0).map(p => p.userId)
+  if (covered.length) {
+    await tx.update(billParticipants).set({ paidAt: null }).where(and(eq(billParticipants.billId, bill.id), inArray(billParticipants.userId, covered)))
+  }
+  await tx.delete(creditUses).where(eq(creditUses.billId, bill.id))
 }
 
 export async function getBill(id: number): Promise<BillDto> {
@@ -103,7 +116,7 @@ export async function getBill(id: number): Promise<BillDto> {
 export async function listBills(opts: { month: string, userId: number, userUnpaid?: boolean, cardUnpaid?: boolean }): Promise<BillDto[]> {
   const [start, end] = monthRange(opts.month)
   const rows = await useDb().query.bills.findMany({
-    where: and(between(bills.addedOn, start, end), opts.cardUnpaid ? and(isNull(bills.cardPaidAt), isNull(bills.paidWithCardOf), eq(bills.paidByCheck, false)) : undefined),
+    where: and(between(bills.addedOn, start, end), opts.cardUnpaid ? and(isNull(bills.cardPaidAt), eq(bills.paidByCheck, false)) : undefined),
     columns: billColumns,
     with: withParticipants,
     orderBy: [desc(bills.addedOn), desc(bills.id)]
@@ -219,11 +232,7 @@ export async function updateBill(id: number, input: { name?: string, amountCents
     || (!!amounts && bill.participants.some(p => amounts[p.userId] !== p.amountCents))
   await db.transaction(async (tx) => {
     // A credit was sized for the old amounts; send it back to unused rather than leave it stale.
-    if (bill.credit && amountsChange) {
-      await tx.update(refunds).set({ appliedToBillId: null, appliedAt: null }).where(eq(refunds.appliedToBillId, id))
-      // Shares were only "paid" because the credit covered them.
-      await tx.update(billParticipants).set({ paidAt: null }).where(eq(billParticipants.billId, id))
-    }
+    if (amountsChange) await releaseCredit(tx, bill)
     const patch: Partial<typeof bills.$inferInsert> = {}
     if (input.name !== undefined) patch.name = input.name.trim()
     if (input.amountCents !== undefined) patch.amountCents = input.amountCents
@@ -250,7 +259,7 @@ export async function deleteBill(id: number): Promise<BillDto> {
 
 export async function notifyIfCardReady(billId: number) {
   const bill = await getBill(billId)
-  if (canMarkCardPaid(bill)) await notify.cardReady(bill, (await getDirectPayNames()).some(n => n.toLowerCase() === bill.name.toLowerCase()))
+  if (canMarkCardPaid(bill)) await notify.cardReady(bill, isDirectPayName(bill.name, await getDirectPayNames()))
 }
 
 /** Returns false when the share was already paid (nothing changed). */
@@ -308,7 +317,7 @@ export async function unpaidByMonth(fromMonth: string, toMonth: string): Promise
     .from(bills)
     .where(and(
       between(bills.addedOn, monthRange(fromMonth)[0], monthRange(toMonth)[1]),
-      sql`((${bills.cardPaidAt} is null and ${bills.paidWithCardOf} is null and not ${bills.paidByCheck}) or exists (select 1 from bill_participants bp where bp.bill_id = ${bills.id} and bp.paid_at is null))`
+      sql`((${bills.cardPaidAt} is null and not ${bills.paidByCheck}) or exists (select 1 from bill_participants bp where bp.bill_id = ${bills.id} and bp.paid_at is null))`
     ))
     .groupBy(month)
   return Object.fromEntries(rows.map(r => [r.month, r.n]))
@@ -316,17 +325,19 @@ export async function unpaidByMonth(fromMonth: string, toMonth: string): Promise
 
 export const countUnpaidInMonth = async (month: string) => (await unpaidByMonth(month, month))[month] ?? 0
 
-/** Mark the purchase as made on someone's personal card, by check (userId null), or back on the shared card. */
-export async function setPaidWithCard(billId: number, userId: number | null, check = false): Promise<BillDto> {
+/** Paid by check from the shared account, or back on the shared card. Switching to check hands back an unused credit. */
+export async function setPaidByCheck(billId: number, check: boolean): Promise<BillDto> {
   const bill = await getBill(billId)
-  // Refunds and credits live on the shared card; switching cards afterwards would leave Citi underpaid.
-  if (bill.cardPaidAt || bill.credit || bill.refunds.length) {
-    throw createError({ statusCode: 409, statusMessage: 'This bill already has a card payment, refund or credit, so its card can no longer change.' })
+  if (bill.cardPaidAt || bill.refunds.length) {
+    throw createError({ statusCode: 409, statusMessage: 'This bill already has a card payment or refund, so how it was paid can no longer change.' })
   }
-  if (userId !== null && !(await householdIds()).includes(userId)) {
-    throw createError({ statusCode: 422, statusMessage: 'Pick someone in the household.' })
+  if (bill.credit && !canRemoveCredit(bill)) {
+    throw createError({ statusCode: 409, statusMessage: 'Someone already paid this bill with the credit taken off. Delete it (admin) and add it again as a check.' })
   }
-  await useDb().update(bills).set({ paidWithCardOf: check ? null : userId, paidByCheck: check }).where(eq(bills.id, billId))
+  await useDb().transaction(async (tx) => {
+    if (check) await releaseCredit(tx, bill)
+    await tx.update(bills).set({ paidByCheck: check }).where(eq(bills.id, billId))
+  })
   return getBill(billId)
 }
 
@@ -337,7 +348,6 @@ export async function listForReconcile(from: string, to: string): Promise<{ bill
   const directPay = await getDirectPayNames()
   const rows = await useDb().query.bills.findMany({
     where: and(
-      isNull(bills.paidWithCardOf),
       eq(bills.paidByCheck, false),
       // MySQL compares names case-insensitively, so "ledford mortgage" still counts.
       directPay.length ? notInArray(bills.name, directPay) : undefined,
@@ -349,9 +359,9 @@ export async function listForReconcile(from: string, to: string): Promise<{ bill
   })
   const refundRows = await useDb().select({ id: refunds.id, billId: refunds.billId, amountCents: refunds.amountCents, refundedOn: refunds.refundedOn })
     .from(refunds)
-    // A refund on a personal-card bill went back to that card, not Citi.
+    // A refund on a check bill never went to Citi.
     .innerJoin(bills, eq(bills.id, refunds.billId))
-    .where(and(between(refunds.refundedOn, start, end), isNull(bills.paidWithCardOf), eq(bills.paidByCheck, false)))
+    .where(and(between(refunds.refundedOn, start, end), eq(bills.paidByCheck, false)))
     .orderBy(asc(refunds.refundedOn), asc(refunds.id))
   return {
     bills: rows.map(toDto).map(b => ({

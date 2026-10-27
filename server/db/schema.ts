@@ -67,8 +67,6 @@ export const bills = mysqlTable('bills', {
   amountCents: cents('amount_cents'),
   addedOn: date('added_on', { mode: 'string' }).notNull(),
   cardPaidAt: timestamp('card_paid_at'),
-  /** Set when the purchase went on this person's personal card instead of the shared one. */
-  paidWithCardOf: fk('paid_with_card_of').references(() => users.id, { onDelete: 'set null' }),
   /** Paid by check from the shared account: the shares still get paid, but nothing goes on the Citi card. */
   paidByCheck: boolean('paid_by_check').notNull().default(false),
   ...timestamps
@@ -86,21 +84,15 @@ export const billParticipants = mysqlTable('bill_participants', {
   ...timestamps
 }, t => [uniqueIndex('bill_participants_unique').on(t.billId, t.userId)])
 
-/** Money a store put back on the card for a bill; becomes a credit a later bill can absorb. */
+/** Money a store put back on the card for a bill; becomes credit later bills use up a bite at a time. */
 export const refunds = mysqlTable('refunds', {
   id: id(),
   billId: fk('bill_id').notNull().references(() => bills.id, { onDelete: 'cascade' }),
   amountCents: cents('amount_cents'),
   refundedOn: date('refunded_on', { mode: 'string' }).notNull(),
   createdBy: fk('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  appliedToBillId: fk('applied_to_bill_id').references(() => bills.id, { onDelete: 'set null' }),
-  appliedAt: timestamp('applied_at'),
   ...timestamps
-}, t => [
-  index('refunds_bill_idx').on(t.billId),
-  // One credit per bill; MySQL allows many NULLs in a unique index.
-  uniqueIndex('refunds_applied_unique').on(t.appliedToBillId)
-])
+}, t => [index('refunds_bill_idx').on(t.billId)])
 
 export const refundShares = mysqlTable('refund_shares', {
   id: id(),
@@ -109,6 +101,19 @@ export const refundShares = mysqlTable('refund_shares', {
   amountCents: cents('amount_cents'),
   ...timestamps
 }, t => [uniqueIndex('refund_shares_unique').on(t.refundId, t.userId)])
+
+/** One person's piece of a refund credit that a bill used. The bill's card reduction is the sum of its pieces. */
+export const creditUses = mysqlTable('credit_uses', {
+  id: id(),
+  refundId: fk('refund_id').notNull().references(() => refunds.id, { onDelete: 'cascade' }),
+  billId: fk('bill_id').notNull().references(() => bills.id, { onDelete: 'cascade' }),
+  userId: fk('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  amountCents: cents('amount_cents'),
+  ...timestamps
+}, t => [
+  uniqueIndex('credit_uses_unique').on(t.refundId, t.billId, t.userId),
+  index('credit_uses_bill_idx').on(t.billId)
+])
 
 export const reimbursements = mysqlTable('reimbursements', {
   id: id(),
@@ -157,13 +162,17 @@ export const settings = mysqlTable('settings', {
 
 export const billsRelations = relations(bills, ({ many }) => ({
   participants: many(billParticipants),
-  refunds: many(refunds, { relationName: 'refundSource' }),
-  appliedCredits: many(refunds, { relationName: 'refundTarget' })
+  refunds: many(refunds),
+  creditUses: many(creditUses)
 }))
 export const refundsRelations = relations(refunds, ({ one, many }) => ({
-  bill: one(bills, { fields: [refunds.billId], references: [bills.id], relationName: 'refundSource' }),
-  appliedTo: one(bills, { fields: [refunds.appliedToBillId], references: [bills.id], relationName: 'refundTarget' }),
-  shares: many(refundShares)
+  bill: one(bills, { fields: [refunds.billId], references: [bills.id] }),
+  shares: many(refundShares),
+  uses: many(creditUses)
+}))
+export const creditUsesRelations = relations(creditUses, ({ one }) => ({
+  refund: one(refunds, { fields: [creditUses.refundId], references: [refunds.id] }),
+  bill: one(bills, { fields: [creditUses.billId], references: [bills.id] })
 }))
 export const refundSharesRelations = relations(refundShares, ({ one }) => ({
   refund: one(refunds, { fields: [refundShares.refundId], references: [refunds.id] })

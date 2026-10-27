@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createBill, countUnpaidInMonth, unpaidByMonth, setPaidWithCard, listForReconcile, deleteBill, getBill, listBills, markCardPaid, markParticipantPaid, paySelected, updateBill, billNameSuggestions, searchBills } from '../server/services/bills'
+import { createBill, countUnpaidInMonth, unpaidByMonth, setPaidByCheck, listForReconcile, deleteBill, getBill, listBills, markCardPaid, markParticipantPaid, paySelected, updateBill, billNameSuggestions, searchBills } from '../server/services/bills'
 import { sentMail } from '../server/utils/mail'
 import { expectHttpError, flushMail, resetDb, seedUsers } from './helpers'
 
@@ -69,8 +69,8 @@ describe('bills', () => {
 
   it('settles a check bill once both shares are paid, with no card step or email', async () => {
     const bill = await createBill({ name: 'Baker Home', amountCents: 1000, createdBy: tim, addedOn: '2026-09-05' })
-    await setPaidWithCard(bill.id, null, true)
-    expect((await getBill(bill.id))).toMatchObject({ paidByCheck: true, paidWithCardOf: null })
+    await setPaidByCheck(bill.id, true)
+    expect((await getBill(bill.id))).toMatchObject({ paidByCheck: true })
     expect(await countUnpaidInMonth('2026-09')).toBe(1)
     sentMail.length = 0
     await markParticipantPaid(bill.id, tim, tim, false)

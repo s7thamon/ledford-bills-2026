@@ -112,8 +112,8 @@ describe('matchPayments', () => {
 
 describe('listForReconcile', async () => {
   const { beforeEach } = await import('vitest')
-  const { createBill, markCardPaid, markParticipantPaid, setPaidWithCard, listForReconcile } = await import('../server/services/bills')
-  const { applyRefund, recordRefund } = await import('../server/services/refunds')
+  const { createBill, markCardPaid, markParticipantPaid, setPaidByCheck, listForReconcile } = await import('../server/services/bills')
+  const { applyCredit, recordRefund } = await import('../server/services/refunds')
   const { resetDb, seedUsers } = await import('./helpers')
   let tim: number, kelly: number
   beforeEach(async () => {
@@ -134,8 +134,8 @@ describe('listForReconcile', async () => {
     const { useDb, schema } = await import('../server/db/client')
     const { eq } = await import('drizzle-orm')
     await useDb().update(schema.bills).set({ cardPaidAt: new Date('2026-09-12T12:00:00Z') }).where(eq(schema.bills.id, before.id))
-    const personal = await createBill({ name: 'Personal', amountCents: 3000, createdBy: tim, addedOn: '2026-09-11' })
-    await setPaidWithCard(personal.id, tim)
+    const check = await createBill({ name: 'Check', amountCents: 3000, createdBy: tim, addedOn: '2026-09-11' })
+    await setPaidByCheck(check.id, true)
     await createBill({ name: 'Far away', amountCents: 4000, createdBy: tim, addedOn: '2026-05-01' })
     const { bills } = await listForReconcile('2026-08-01', '2026-09-20')
     expect(bills.map(b => b.name).sort()).toEqual(['Inside', 'Paid later'])
@@ -167,20 +167,20 @@ describe('listForReconcile', async () => {
     await markCardPaid(rug.id)
     const refund = await recordRefund(rug.id, { amountCents: 30000, refundedOn: '2026-09-05' }, tim)
     const rep = await createBill({ name: 'Replacement', amountCents: 32000, createdBy: tim, addedOn: '2026-09-06' })
-    await applyRefund(refund.id, rep.id)
+    await applyCredit(rep.id)
     const r = await listForReconcile('2026-09-01', '2026-09-20')
     expect(r.bills.find(b => b.id === rep.id)!.cardDueCents).toBe(2000)
     expect(r.refunds).toEqual([{ id: refund.id, billId: rug.id, amountCents: 30000, refundedOn: '2026-09-05' }])
   })
 
-  it('leaves out refunds on personal-card bills', async () => {
-    const b = await createBill({ name: 'Personal', amountCents: 5000, createdBy: tim, addedOn: '2026-09-02' })
+  it('leaves out refunds on check bills', async () => {
+    const b = await createBill({ name: 'Check', amountCents: 5000, createdBy: tim, addedOn: '2026-09-02' })
     await payBoth(b.id)
     const refund = await recordRefund(b.id, { amountCents: 1000, refundedOn: '2026-09-04' }, tim)
     const { useDb, schema } = await import('../server/db/client')
     const { eq } = await import('drizzle-orm')
-    // Marked personal after the refund (the app now blocks this order, older data may still have it).
-    await useDb().update(schema.bills).set({ paidWithCardOf: tim }).where(eq(schema.bills.id, b.id))
+    // Marked check after the refund (the app blocks this order, older data may still have it).
+    await useDb().update(schema.bills).set({ paidByCheck: true }).where(eq(schema.bills.id, b.id))
     expect((await listForReconcile('2026-09-01', '2026-09-20')).refunds.map(r => r.id)).not.toContain(refund.id)
   })
 

@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { setPaidWithCard } from '../../../services/bills'
+import { setPaidByCheck } from '../../../services/bills'
 
-const Body = z.object({ userId: z.number().int().positive().nullable(), check: z.boolean().default(false) })
+const Body = z.object({ check: z.boolean() })
 
 export default defineEventHandler(async (event) => {
-  const { userId, check } = await readValidatedBody(event, Body.parse)
-  const bill = await setPaidWithCard(idParam(event), userId, check)
+  const { check } = await readValidatedBody(event, Body.parse)
+  const bill = await setPaidByCheck(idParam(event), check)
   await broadcast(event, { topics: ['bills'] })
   return bill
 })
