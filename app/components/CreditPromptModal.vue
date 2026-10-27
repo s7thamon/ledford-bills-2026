@@ -16,8 +16,8 @@ watch(open, (isOpen) => {
 const pieces = computed(() => props.bill ? sizeBite(props.bill, poolsFromRefunds(refunds.value)) : [])
 const credit = computed(() => creditFromPieces(pieces.value))
 const sources = computed(() => refunds.value.filter(r => pieces.value.some(x => x.refundId === r.id)))
-const leftBefore = computed(() => sources.value.reduce((s, r) => s + r.leftCents, 0))
-const leftAfter = computed(() => refunds.value.reduce((s, r) => s + r.leftCents, 0) - credit.value.amountCents)
+const leftBefore = computed(() => refunds.value.reduce((s, r) => s + r.leftCents, 0))
+const leftAfter = computed(() => leftBefore.value - credit.value.amountCents)
 const firstName = (id: number) => props.users.find(u => u.id === id)?.name.split(' ')[0] ?? 'Someone'
 
 async function apply() {
@@ -37,12 +37,12 @@ async function apply() {
     <template #body>
       <div v-if="bill && pieces.length" class="space-y-4">
         <p class="text-sm text-toned">
-          Credit left from
+          Credit from
           <template v-for="(r, i) in sources" :key="r.id">
             <b class="text-highlighted">{{ r.billName }}</b> (refunded {{ usDotDate(r.refundedOn) }}){{ i < sources.length - 1 ? ' and ' : '' }}
-          </template>:
-          <b class="text-highlighted">{{ formatMoney(leftBefore) }}</b>.
-          {{ credit.amountCents >= leftBefore ? 'This bill can use all of it.' : '' }}
+          </template>.
+          Credit left: <b class="text-highlighted">{{ formatMoney(leftBefore) }}</b>.
+          {{ leftAfter ? '' : 'This bill can use all of it.' }}
         </p>
         <div class="rounded-xl bg-violet-50 dark:bg-violet-500/10 ring-1 ring-violet-200 dark:ring-violet-500/20 px-4 py-3 text-sm space-y-1 tabular-nums">
           <div class="flex justify-between">

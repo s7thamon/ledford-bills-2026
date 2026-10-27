@@ -213,11 +213,6 @@ async function openRefund(l: StatementLine, billId: number) {
   refundOpen.value = true
 }
 
-async function markPersonal(billId: number, userId: number) {
-  if (await run(() => $fetch(`/api/bills/${billId}/card`, { method: 'PUT', body: { userId } }), 'Marked as paid with a different card')) await reload()
-}
-const personalItems = (billId: number) => users.value.map(u => ({ label: `${u.name.split(' ')[0]}'s personal card`, onSelect: () => markPersonal(billId, u.id) }))
-
 // ---- Card payments ----
 const pUsedBills = computed(() => new Set([...pMatches.value.flatMap(m => m.billIds), ...pSuggestions.value.flatMap(s => s.billIds)]))
 const pUsedLines = computed(() => new Set([...pMatches.value.flatMap(m => m.lineIds), ...pSuggestions.value.flatMap(s => s.lineIds)]))
@@ -481,13 +476,6 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
                     <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" class="rounded-full p-0.5" :aria-label="`Send ${formatMoney(line(id).amountCents)} back`" @click.stop="sendBack(b.id, id)" />
                   </UTooltip>
                 </span>
-              </div>
-              <div v-else class="mt-2" @click.stop>
-                <UDropdownMenu :items="personalItems(b.id)">
-                  <UButton size="xs" color="neutral" variant="soft" class="rounded-full" icon="i-lucide-wallet">
-                    Mark Paid With Different Card
-                  </UButton>
-                </UDropdownMenu>
               </div>
             </div>
           </div>
