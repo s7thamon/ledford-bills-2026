@@ -47,6 +47,18 @@ export async function listReimbursements(opts: { resolved: boolean, page: number
   return { items, total: totals?.n ?? 0, pageSize: PAGE_SIZE, openOwedTo }
 }
 
+/** Open items waiting on this person: money to send, or a transfer to confirm. */
+export async function countWaitingOn(userId: number) {
+  const [row] = await useDb().select({ n: count() }).from(reimbursements).where(and(
+    isNull(reimbursements.completedAt),
+    or(
+      and(eq(reimbursements.otherUserId, userId), isNull(reimbursements.transferCompletedAt)),
+      and(eq(reimbursements.createdBy, userId), sql`${reimbursements.transferCompletedAt} is not null`)
+    )
+  ))
+  return row?.n ?? 0
+}
+
 export async function createReimbursement(input: {
   name: string
   owedCents: number

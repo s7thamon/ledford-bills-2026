@@ -27,7 +27,8 @@ export function useLive() {
     }
     socket.onmessage = (msg) => {
       const event = JSON.parse(msg.data) as LiveEvent
-      refreshNuxtData(event.topics)
+      // "<topic>-badge" keys are the menu badges, which live outside the page that owns the topic.
+      refreshNuxtData(event.topics.flatMap(t => [t, `${t}-badge`]))
       if (event.message && event.actorId !== user.value?.id) {
         toast.add({ title: event.message, icon: 'i-lucide-bell', color: 'info' })
       }

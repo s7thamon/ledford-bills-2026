@@ -55,12 +55,18 @@ const stats = computed(() => {
   const owed = data.value.openOwedTo
   const toMe = owed[me.value] ?? 0
   const all = Object.values(owed).reduce((s, c) => s + c, 0)
+  // Clicking a card selects its open rows on this page, which turns the cards into selected totals.
+  const open = data.value.items.filter(i => !i.completedAt)
   return [
-    { title: 'Open Total', icon: 'i-lucide-receipt-text', cents: all },
-    { title: `${name} Owes You`, icon: 'i-lucide-arrow-down-left', cents: toMe },
-    { title: `You Owe ${name}`, icon: 'i-lucide-arrow-up-right', cents: all - toMe }
+    { title: 'Open Total', icon: 'i-lucide-receipt-text', cents: all, ids: open.map(i => i.id) },
+    { title: `${name} Owes You`, icon: 'i-lucide-arrow-down-left', cents: toMe, ids: open.filter(i => i.createdBy === me.value).map(i => i.id) },
+    { title: `You Owe ${name}`, icon: 'i-lucide-arrow-up-right', cents: all - toMe, ids: open.filter(i => i.createdBy !== me.value).map(i => i.id) }
   ]
 })
+function clickStat(stat: (typeof stats.value)[number]) {
+  if (selected.value.length) copy(stat.cents)
+  else if ('ids' in stat) selected.value = stat.ids
+}
 async function copy(cents: number) {
   await navigator.clipboard.writeText(moneyNumber(cents))
   toast.add({ title: `Copied ${moneyNumber(cents)}`, icon: 'i-lucide-clipboard-check' })
@@ -164,15 +170,14 @@ function openEdit(item: Item) {
     </div>
 
     <div class="grid gap-5 sm:grid-cols-3">
-      <component
-        :is="selected.length ? 'button' : 'div'"
+      <button
         v-for="stat in stats"
         :key="stat.title"
-        :type="selected.length ? 'button' : undefined"
-        class="surface-card flex items-center gap-4 px-6 py-5 text-left"
-        :class="selected.length && 'cursor-pointer transition ring-2 ring-primary/30 hover:bg-primary/5'"
-        :title="selected.length ? 'Copy amount' : undefined"
-        @click="selected.length && copy(stat.cents)"
+        type="button"
+        class="surface-card flex items-center gap-4 px-6 py-5 text-left cursor-pointer transition hover:ring-2 hover:ring-primary/30"
+        :class="selected.length > 0 && 'ring-2 ring-primary/30 hover:bg-primary/5'"
+        :title="selected.length ? 'Copy amount' : 'Select these in the table'"
+        @click="clickStat(stat)"
       >
         <div class="icon-tile">
           <UIcon :name="stat.icon" class="size-5" />
@@ -186,7 +191,7 @@ function openEdit(item: Item) {
             {{ formatMoney(stat.cents) }}
           </div>
         </div>
-      </component>
+      </button>
     </div>
 
     <div class="surface-card overflow-hidden">

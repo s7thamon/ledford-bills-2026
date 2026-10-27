@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createReimbursement, deleteReimbursement, listReimbursements, markReimbursementComplete, markTransferComplete, updateReimbursement } from '../server/services/reimbursements'
+import { countWaitingOn, createReimbursement, deleteReimbursement, listReimbursements, markReimbursementComplete, markTransferComplete, updateReimbursement } from '../server/services/reimbursements'
 import { sentMail } from '../server/utils/mail'
 import { expectHttpError, flushMail, resetDb, seedUsers } from './helpers'
 
@@ -32,7 +32,9 @@ describe('reimbursements', () => {
     const r = await createReimbursement({ name: 'Gas', owedCents: 2500, createdBy: tim })
     await expectHttpError(markTransferComplete(r.id, tim), 403)
     await expectHttpError(markReimbursementComplete(r.id, tim), 403)
+    expect([await countWaitingOn(tim), await countWaitingOn(kelly)]).toEqual([0, 1])
     await markTransferComplete(r.id, kelly)
+    expect([await countWaitingOn(tim), await countWaitingOn(kelly)]).toEqual([1, 0])
     await expectHttpError(updateReimbursement(r.id, tim, { name: 'Gas', owedCents: 1 }), 403)
     await expectHttpError(markReimbursementComplete(r.id, kelly), 403)
     await markReimbursementComplete(r.id, tim)

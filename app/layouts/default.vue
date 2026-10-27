@@ -10,9 +10,11 @@ const toast = useToast()
 const thisMonth = currentMonth()
 const historyMonths = Array.from({ length: 12 }, (_, i) => shiftMonth(thisMonth, -(i + 1)))
 
-const { data: unpaid, refresh: refreshUnpaid } = await useFetch('/api/bills/unpaid-months', { key: 'unpaid-months', default: () => ({}) as Record<string, number> })
-// Paying on the Bills page refreshes the 'bills' key (live updates too); follow it so the counts stay current.
+const { data: unpaid, refresh: refreshUnpaid } = await useFetch('/api/bills/unpaid-months', { key: 'bills-badge', default: () => ({}) as Record<string, number> })
+const { data: waiting, refresh: refreshWaiting } = await useFetch('/api/reimbursements/waiting', { key: 'reimbursements-badge', default: () => 0 })
+// Acting on those pages refreshes their own data; follow it so the menu badges stay current.
 watch(useNuxtData('bills').data, () => refreshUnpaid())
+watch(useNuxtData('reimbursements').data, () => refreshWaiting())
 
 const nav = computed<NavigationMenuItem[]>(() => [
   { label: 'Bills', icon: 'i-lucide-banknote', to: '/', active: route.path === '/' && (!route.query.month || route.query.month === thisMonth) },
@@ -24,7 +26,7 @@ const nav = computed<NavigationMenuItem[]>(() => [
     children: historyMonths.map(m => ({ label: monthLabel(m), to: { path: '/', query: { month: m } }, badge: unpaid.value[m] ? `${unpaid.value[m]} Unpaid` : undefined }))
   },
   { label: 'Recurring', icon: 'i-lucide-repeat', to: '/recurring' },
-  { label: 'Reimbursements', icon: 'i-lucide-arrow-left-right', to: '/reimbursements' },
+  { label: 'Reimbursements', icon: 'i-lucide-arrow-left-right', to: '/reimbursements', badge: waiting.value ? { label: String(waiting.value), color: 'warning' as const, variant: 'solid' as const, size: 'sm' as const } : undefined },
   { label: 'Reconcile', icon: 'i-lucide-scale', to: '/reconcile' },
   { label: 'Insights', icon: 'i-lucide-chart-column', to: '/insights' }
 ])
