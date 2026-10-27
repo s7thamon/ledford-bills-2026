@@ -5,14 +5,13 @@ interface Bill {
   amountCents: number
   addedOn: string
   cardPaidAt: string | null
-  paidWithCardOf: number | null
   paidByCheck: boolean
-  credit: { amountCents: number, shares: Record<number, number>, sourceName: string } | null
+  credit: { amountCents: number, shares: Record<number, number>, sources: { refundId: number, sourceName: string, amountCents: number, shares: Record<number, number> }[] } | null
   refunds: { amountCents: number }[]
   participants: { userId: number, amountCents: number, paidAt: string | null }[]
 }
 
-const props = defineProps<{ bill: Bill | null, users: { id: number, name: string }[] }>()
+const props = defineProps<{ bill: Bill | null, users: { id: number, name: string }[], adminMode: boolean, directPay: boolean }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ changed: [] }>()
 const run = useApi()
@@ -27,18 +26,20 @@ const editable = computed(() => !!props.bill && canEditAmounts(props.bill))
 const deletable = computed(() => !!props.bill && canDeleteBill(props.bill))
 const totalCents = computed(() => parseAmount(amount.value))
 const refundOpen = ref(false)
-const refundable = computed(() => !!props.bill && !editable.value && onSharedCard(props.bill)
+const settleOpen = ref(false)
+// The bill that actually went on a personal card: admin deletes it once the money is settled by hand.
+const adminDeletable = computed(() => !!props.bill && props.adminMode && canAdminDeleteBill(props.bill, props.directPay))
+const refundable = computed(() => !!props.bill && !editable.value && onSharedCard(props.bill) && !props.directPay
   && props.bill.amountCents > props.bill.refunds.reduce((s, r) => s + r.amountCents, 0))
 const amountsChanged = computed(() => !!props.bill && (totalCents.value !== props.bill.amountCents
   || props.bill.participants.some(p => parseAmount(splits.value[p.userId]) !== p.amountCents)))
 
-// USelect cannot hold null, so 0 stands for the shared card.
-// -1 is "Check": paid from the shared account, never on a card.
-const cardItems = computed(() => [{ label: 'Shared card (Citi)', value: 0 }, { label: 'Check (shared account)', value: -1 }, ...props.users.map(u => ({ label: `${u.name.split(' ')[0]}'s personal card`, value: u.id }))])
-async function setCard(value: number) {
+// Check can't change once the card or a refund is involved, or after real money was paid against a credit.
+const checkLocked = computed(() => !props.bill || !!props.bill.cardPaidAt || props.bill.refunds.length > 0 || (!!props.bill.credit && !canRemoveCredit(props.bill)))
+async function setCheck(check: boolean) {
   if (!props.bill) return
-  const message = value === -1 ? 'Marked as paid by check' : value ? 'Marked as paid with a different card' : 'Back on the shared card'
-  if (await run(() => $fetch(`/api/bills/${props.bill!.id}/card`, { method: 'PUT', body: { userId: value > 0 ? value : null, check: value === -1 } }), message)) emit('changed')
+  const message = check ? (props.bill.credit ? 'Marked as paid by check; the credit is available again' : 'Marked as paid by check') : 'Back on the shared card'
+  if (await run(() => $fetch(`/api/bills/${props.bill!.id}/card`, { method: 'PUT', body: { check } }), message)) emit('changed')
 }
 
 watch(() => [open.value, props.bill] as const, ([isOpen, bill]) => {
@@ -91,19 +92,29 @@ async function remove() {
           <UInput v-model="amount" icon="i-lucide-dollar-sign" inputmode="decimal" :disabled="!editable" class="w-full" @update:model-value="resplit" />
         </UFormField>
         <SplitFields v-model="splits" :users="users" :total-cents="totalCents" :disabled="!editable" />
-        <UFormField label="Paid With" help="Pick a personal card if this was not charged to the shared Citi card.">
-          <USelect :model-value="bill?.paidByCheck ? -1 : bill?.paidWithCardOf ?? 0" :items="cardItems" class="w-full" :disabled="!bill || !!bill.cardPaidAt || !!bill.credit || bill.refunds.length > 0" @update:model-value="v => setCard(Number(v))" />
-        </UFormField>
+        <div class="flex items-center gap-3 rounded-lg ring-1 ring-default px-3 py-2.5">
+          <UIcon name="i-lucide-file-pen-line" class="size-5 text-muted shrink-0" />
+          <div class="flex-1 text-sm">
+            <div class="font-medium text-highlighted">
+              Paid by check
+            </div>
+            <div class="text-xs text-muted">
+              From the shared account; nothing goes on the Citi card.
+            </div>
+          </div>
+          <USwitch :model-value="!!bill?.paidByCheck" :disabled="checkLocked" aria-label="Paid by check" @update:model-value="setCheck" />
+        </div>
         <UAlert
           v-if="bill?.credit && amountsChanged"
           color="warning"
           variant="soft"
           icon="i-lucide-triangle-alert"
-          :title="`Saving removes the −${formatMoney(bill.credit.amountCents)} credit from ${bill.credit.sourceName}`"
+          :title="`Saving removes the −${formatMoney(bill.credit.amountCents)} credit from ${bill.credit.sources.map(src => src.sourceName).join(', ')}`"
           description="The amounts it was sized for are changing. The credit becomes available again for another bill."
         />
       </form>
       <RefundModal v-model:open="refundOpen" :bill="bill" :users="users" @changed="open = false; emit('changed')" />
+      <SettleDeleteModal v-model:open="settleOpen" :bill="bill" :users="users" @changed="open = false; emit('changed')" />
     </template>
     <template #footer>
       <div class="flex w-full items-center gap-2">
@@ -115,6 +126,9 @@ async function remove() {
             Confirm delete
           </UButton>
         </template>
+        <UButton v-else-if="adminDeletable" color="error" variant="outline" icon="i-lucide-trash-2" @click="settleOpen = true">
+          Delete (Admin)
+        </UButton>
         <UButton v-if="refundable" color="error" variant="soft" icon="i-lucide-undo-2" @click="refundOpen = true">
           Record Refund
         </UButton>

@@ -176,7 +176,7 @@ const columns: TableColumn<Bill>[] = [
               ↩ Refunded −{{ formatMoney(row.original.refunds.reduce((s, r) => s + r.amountCents, 0)) }}
             </UBadge>
           </UTooltip>
-          <UTooltip v-if="row.original.credit" :text="`Credit from ${row.original.credit.sourceName}, refunded ${usDotDate(row.original.credit.refundedOn)}`" :delay-duration="0" :content="{ side: 'top' }">
+          <UTooltip v-if="row.original.credit" :text="row.original.credit.sources.map(s => `${formatMoney(s.amountCents)} credit from ${s.sourceName}, refunded ${usDotDate(s.refundedOn)}`).join(' · ')" :delay-duration="0" :content="{ side: 'top' }">
             <UBadge color="secondary" variant="soft" class="ms-2 align-middle">
               ◎ −{{ formatMoney(row.original.credit.amountCents) }} credit
             </UBadge>
@@ -198,10 +198,7 @@ const columns: TableColumn<Bill>[] = [
           <UBadge v-else-if="row.original.paidByCheck && allParticipantsPaid(row.original)" color="success" variant="soft" size="md" icon="i-lucide-file-pen-line">
             Check
           </UBadge>
-          <UBadge v-else-if="row.original.paidWithCardOf" color="neutral" variant="soft" size="md" icon="i-lucide-wallet">
-          Personal card
-        </UBadge>
-        <UBadge v-else-if="allParticipantsPaid(row.original)" color="primary" variant="soft" size="md">
+          <UBadge v-else-if="allParticipantsPaid(row.original)" color="primary" variant="soft" size="md">
             Card due
           </UBadge>
           <UBadge v-else color="warning" variant="soft" size="md">

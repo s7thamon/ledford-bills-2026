@@ -37,28 +37,26 @@ watch(bills, () => refreshPrev())
 const { data: refunds, refresh: refreshRefunds } = await useFetch('/api/refunds', { key: 'refunds', default: () => [] })
 // Live updates refresh the 'bills' key; follow it so credits stay current too.
 watch(bills, () => refreshRefunds())
-const unusedRefunds = computed(() => refunds.value.filter(r => !r.appliedToBillId))
-const unusedCredits = computed(() => {
+const creditLeft = computed(() => {
   const totals: Record<number, number> = {}
-  for (const r of unusedRefunds.value) for (const [id, c] of Object.entries(r.shares)) totals[Number(id)] = (totals[Number(id)] ?? 0) + c
-  return { card: unusedRefunds.value.reduce((s, r) => s + r.amountCents, 0), you: totals[me.value] ?? 0, partner: Object.entries(totals).filter(([id]) => Number(id) !== me.value).reduce((s, [, c]) => s + c, 0) }
+  for (const r of refunds.value) for (const [id, c] of Object.entries(r.left)) totals[Number(id)] = (totals[Number(id)] ?? 0) + c
+  return { card: refunds.value.reduce((s, r) => s + r.leftCents, 0), you: totals[me.value] ?? 0, partner: Object.entries(totals).filter(([id]) => Number(id) !== me.value).reduce((s, [, c]) => s + c, 0) }
 })
 const creditsOpen = ref(false)
 const promptOpen = ref(false)
-const promptRefund = ref<(typeof refunds.value)[number] | null>(null)
 const promptBill = ref<Bill | null>(null)
 const refreshAll = () => Promise.all([refresh(), refreshRefunds()])
 
 const refundedCents = (bill: Bill) => bill.refunds.reduce((s, r) => s + r.amountCents, 0)
 const fullyRefunded = (bill: Bill) => refundedCents(bill) >= bill.amountCents
-const refundTip = (bill: Bill) => bill.refunds.map(r => `Refunded ${formatMoney(r.amountCents)} on ${usDotDate(r.refundedOn)}${r.appliedToName ? `, credit used on ${r.appliedToName}` : ', credit not used yet'}`).join(' · ')
+const refundTip = (bill: Bill) => bill.refunds.map(r => `Refunded ${formatMoney(r.amountCents)} on ${usDotDate(r.refundedOn)}${r.uses.length ? `, credit used on ${r.uses.map(u => u.billName).join(', ')}` : ', credit not used yet'}`).join(' · ')
 const splitTip = (bill: Bill) => bill.participants.toSorted((a, b) => Number(b.userId === me.value) - Number(a.userId === me.value)).map(p => `${firstNameOf(p.userId)} ${formatMoney(p.amountCents)}`).join(' · ')
-const creditTip = (bill: Bill) => bill.credit ? `Credit from ${bill.credit.sourceName}, refunded ${usDotDate(bill.credit.refundedOn)}` : ''
+const creditTip = (bill: Bill) => bill.credit?.sources.map(s => `${formatMoney(s.amountCents)} credit from ${s.sourceName}, refunded ${usDotDate(s.refundedOn)}`).join(' · ') ?? ''
 const goToMonth = (addedOn: string | null) => addedOn && router.push({ query: { month: addedOn.slice(0, 7) } })
 
 // Bills on the Settings "Paid Directly" list (the mortgage) are paid from the shared account, so their button says Pay Account.
 const { data: directPay } = await useFetch('/api/settings/direct-pay', { default: () => [] as string[] })
-const isDirectPay = (bill: Bill) => directPay.value.some(n => n.toLowerCase() === bill.name.toLowerCase())
+const isDirectPay = (bill: Bill) => isDirectPayName(bill.name, directPay.value)
 
 const { data: suggestions, refresh: refreshSuggestions } = await useFetch('/api/bills/suggestions', { key: 'bill-suggestions', default: () => [] })
 
@@ -185,11 +183,7 @@ async function createBill() {
   form.amount = ''
   if (bill.addedOn.slice(0, 7) !== month.value) await router.push({ query: {} })
   await Promise.all([refresh(), refreshSuggestions(), refreshRefunds()])
-  const offer = [...unusedRefunds.value]
-    .sort((a, b) => a.refundedOn.localeCompare(b.refundedOn) || a.id - b.id)
-    .find(r => canAbsorb(bill, { amountCents: r.amountCents, shares: r.shares }))
-  if (offer) {
-    promptRefund.value = offer
+  if (canTakeCredit(bill, isDirectPay(bill)) && sizeBite(bill, poolsFromRefunds(refunds.value)).length) {
     promptBill.value = bill
     promptOpen.value = true
   }
@@ -337,9 +331,9 @@ function openEdit(bill: Bill) {
           />
         </div>
         <div v-if="refunds.length && !hasSelection" class="ms-auto">
-          <UButton :color="unusedRefunds.length ? 'secondary' : 'neutral'" variant="soft" size="sm" class="rounded-full" icon="i-lucide-badge-percent" @click="creditsOpen = true">
-            <template v-if="unusedRefunds.length">
-              Credits available · You {{ formatMoney(unusedCredits.you) }} · {{ partnerName }} {{ formatMoney(unusedCredits.partner) }} · Card {{ formatMoney(unusedCredits.card) }}
+          <UButton :color="creditLeft.card ? 'secondary' : 'neutral'" variant="soft" size="sm" class="rounded-full" icon="i-lucide-badge-percent" @click="creditsOpen = true">
+            <template v-if="creditLeft.card">
+              Credit left · You {{ formatMoney(creditLeft.you) }} · {{ partnerName }} {{ formatMoney(creditLeft.partner) }} · Card {{ formatMoney(creditLeft.card) }}
             </template>
             <template v-else>
               Refund history
@@ -421,12 +415,12 @@ function openEdit(bill: Bill) {
           >{{ row.original.name }}</span>
         </UTooltip>
         <UTooltip v-if="row.original.refunds.length" :text="refundTip(row.original)" :delay-duration="0" :content="{ side: 'top' }">
-          <UBadge as="button" color="error" variant="soft" class="ms-2 align-middle" @click.stop="goToMonth(row.original.refunds[0]?.appliedToAddedOn ?? null)">
+          <UBadge as="button" color="error" variant="soft" class="ms-2 align-middle" @click.stop="goToMonth(row.original.refunds[0]?.uses[0]?.billAddedOn ?? null)">
             ↩ Refunded −{{ formatMoney(refundedCents(row.original)) }}
           </UBadge>
         </UTooltip>
         <UTooltip v-if="row.original.credit" :text="creditTip(row.original)" :delay-duration="0" :content="{ side: 'top' }">
-          <UBadge as="button" color="secondary" variant="soft" class="ms-2 align-middle" @click.stop="goToMonth(row.original.credit.sourceAddedOn)">
+          <UBadge as="button" color="secondary" variant="soft" class="ms-2 align-middle" @click.stop="goToMonth(row.original.credit.sources[0]?.sourceAddedOn ?? null)">
             ◎ −{{ formatMoney(row.original.credit.amountCents) }} credit
           </UBadge>
         </UTooltip>
@@ -497,12 +491,7 @@ function openEdit(bill: Bill) {
       </template>
 
       <template #card-cell="{ row }">
-        <UTooltip v-if="row.original.paidWithCardOf" :text="`Paid with ${firstNameOf(row.original.paidWithCardOf)}'s personal card; not on the shared Citi card`" :delay-duration="0" :content="{ side: 'top' }">
-          <UBadge color="neutral" variant="soft" size="md" icon="i-lucide-wallet">
-            {{ firstNameOf(row.original.paidWithCardOf) }}'s card
-          </UBadge>
-        </UTooltip>
-        <UTooltip v-else-if="row.original.paidByCheck" text="Paid by check from the shared account; nothing goes on the Citi card" :content="{ side: 'top' }">
+        <UTooltip v-if="row.original.paidByCheck" text="Paid by check from the shared account; nothing goes on the Citi card" :content="{ side: 'top' }">
           <UBadge color="neutral" variant="soft" size="md" icon="i-lucide-file-pen-line">
             Check
           </UBadge>
@@ -530,8 +519,8 @@ function openEdit(bill: Bill) {
 
     </div>
 
-    <BillEditModal v-model:open="editOpen" :bill="editingBill" :users="users" @changed="refreshAll" />
-    <CreditPromptModal v-model:open="promptOpen" :refund="promptRefund" :bill="promptBill" :users="users" @changed="refreshAll" />
-    <CreditsModal v-model:open="creditsOpen" :refunds="refunds" :bills="bills" :users="users" @changed="refreshAll" />
+    <BillEditModal v-model:open="editOpen" :bill="editingBill" :users="users" :admin-mode="adminMode" :direct-pay="!!editingBill && isDirectPay(editingBill)" @changed="refreshAll" />
+    <CreditPromptModal v-model:open="promptOpen" :bill="promptBill" :refunds="refunds" :users="users" @changed="refreshAll" />
+    <CreditsModal v-model:open="creditsOpen" :refunds="refunds" :bills="bills" :users="users" :direct-pay="directPay" @changed="refreshAll" />
   </div>
 </template>

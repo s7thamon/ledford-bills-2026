@@ -43,7 +43,7 @@ async function save() {
 </script>
 
 <template>
-  <UModal v-model:open="open" :title="`Record Refund · ${bill?.name ?? ''}`" :description="bill ? `Paid ${formatMoney(bill.amountCents)} on ${usDotDate(bill.addedOn)}. The refund becomes a credit a later bill can use.` : ''">
+  <UModal v-model:open="open" :title="`Record Refund · ${bill?.name ?? ''}`" :description="bill ? `Paid ${formatMoney(bill.amountCents)} on ${usDotDate(bill.addedOn)}. The refund becomes credit that later bills use up.` : ''">
     <template #body>
       <form id="record-refund" class="space-y-4" @submit.prevent="save">
         <div class="grid grid-cols-2 gap-3">
