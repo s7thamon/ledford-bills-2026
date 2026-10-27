@@ -288,18 +288,21 @@ export async function paySelected(ids: number[], actorId: number, target: 'me' |
   return billIds.length
 }
 
-/** Bills in a month that still have an unpaid share or an unpaid card. */
-export async function countUnpaidInMonth(month: string): Promise<number> {
-  const [start, end] = monthRange(month)
-  const [row] = await useDb()
-    .select({ n: count() })
+/** Per month (YYYY-MM), bills that still have an unpaid share or an unpaid card. Months with none are left out. */
+export async function unpaidByMonth(fromMonth: string, toMonth: string): Promise<Record<string, number>> {
+  const month = sql<string>`date_format(${bills.addedOn}, '%Y-%m')`
+  const rows = await useDb()
+    .select({ month, n: count() })
     .from(bills)
     .where(and(
-      between(bills.addedOn, start, end),
+      between(bills.addedOn, monthRange(fromMonth)[0], monthRange(toMonth)[1]),
       sql`((${bills.cardPaidAt} is null and ${bills.paidWithCardOf} is null) or exists (select 1 from bill_participants bp where bp.bill_id = ${bills.id} and bp.paid_at is null))`
     ))
-  return row?.n ?? 0
+    .groupBy(month)
+  return Object.fromEntries(rows.map(r => [r.month, r.n]))
 }
+
+export const countUnpaidInMonth = async (month: string) => (await unpaidByMonth(month, month))[month] ?? 0
 
 /** Mark the purchase as made on someone's personal card (or clear it with null). */
 export async function setPaidWithCard(billId: number, userId: number | null): Promise<BillDto> {

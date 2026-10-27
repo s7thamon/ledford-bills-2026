@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DropdownMenuItem, NavigationMenuItem } from '@nuxt/ui'
+import { NavigationMenuLink } from 'reka-ui'
 
 const route = useRoute()
 const { user, session, clear, fetch: refreshSession } = useUserSession()
@@ -9,13 +10,18 @@ const toast = useToast()
 const thisMonth = currentMonth()
 const historyMonths = Array.from({ length: 12 }, (_, i) => shiftMonth(thisMonth, -(i + 1)))
 
+const { data: unpaid, refresh: refreshUnpaid } = await useFetch('/api/bills/unpaid-months', { key: 'unpaid-months', default: () => ({}) as Record<string, number> })
+// Paying on the Bills page refreshes the 'bills' key (live updates too); follow it so the counts stay current.
+watch(useNuxtData('bills').data, () => refreshUnpaid())
+
 const nav = computed<NavigationMenuItem[]>(() => [
   { label: 'Bills', icon: 'i-lucide-banknote', to: '/', active: route.path === '/' && (!route.query.month || route.query.month === thisMonth) },
   {
     label: 'History',
     icon: 'i-lucide-calendar-days',
+    slot: 'history' as const,
     active: route.path === '/' && !!route.query.month && route.query.month !== thisMonth,
-    children: historyMonths.map(m => ({ label: monthLabel(m), to: { path: '/', query: { month: m } } }))
+    children: historyMonths.map(m => ({ label: monthLabel(m), to: { path: '/', query: { month: m } }, badge: unpaid.value[m] ? `${unpaid.value[m]} Unpaid` : undefined }))
   },
   { label: 'Recurring', icon: 'i-lucide-repeat', to: '/recurring' },
   { label: 'Reimbursements', icon: 'i-lucide-arrow-left-right', to: '/reimbursements' },
@@ -73,7 +79,23 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
           <AppLogo class="size-8" />
           Ledford Bills
         </NuxtLink>
-        <UNavigationMenu :items="nav" variant="link" class="hidden lg:flex" :ui="{ link: 'rounded-full px-3 py-2 data-active:bg-primary/10' }" />
+        <UNavigationMenu :items="nav" variant="link" class="hidden lg:flex" :ui="{ link: 'rounded-full px-3 py-2 data-active:bg-primary/10' }">
+          <template #history-content>
+            <ul class="grid w-64 gap-0.5 p-2">
+              <li v-for="m in historyMonths" :key="m">
+                <NavigationMenuLink as-child>
+                  <ULink :to="{ path: '/', query: { month: m } }" class="flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm text-default hover:bg-elevated/70 transition-colors" active-class="text-primary font-medium">
+                    {{ monthLabel(m) }}
+                    <span v-if="unpaid[m]" class="flex items-center gap-1.5 text-xs text-muted">
+                      <UBadge :label="String(unpaid[m])" color="warning" variant="soft" size="sm" />
+                      Unpaid
+                    </span>
+                  </ULink>
+                </NavigationMenuLink>
+              </li>
+            </ul>
+          </template>
+        </UNavigationMenu>
       </template>
 
       <template #right>

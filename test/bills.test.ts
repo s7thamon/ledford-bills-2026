@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createBill, countUnpaidInMonth, deleteBill, getBill, listBills, markCardPaid, markParticipantPaid, paySelected, updateBill, billNameSuggestions, searchBills } from '../server/services/bills'
+import { createBill, countUnpaidInMonth, unpaidByMonth, deleteBill, getBill, listBills, markCardPaid, markParticipantPaid, paySelected, updateBill, billNameSuggestions, searchBills } from '../server/services/bills'
 import { sentMail } from '../server/utils/mail'
 import { expectHttpError, flushMail, resetDb, seedUsers } from './helpers'
 
@@ -84,6 +84,7 @@ describe('bills', () => {
     await paySelected([a.id], kelly, 'me')
     await markCardPaid(a.id)
     expect(await countUnpaidInMonth('2026-09')).toBe(1)
+    expect(await unpaidByMonth('2026-08', '2026-10')).toEqual({ '2026-09': 1 })
   })
 
   it('suggests repeated names and searches with escaped wildcards', async () => {
