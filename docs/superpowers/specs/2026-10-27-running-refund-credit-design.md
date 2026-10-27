@@ -98,6 +98,15 @@ Unchanged trigger: after a bill is created through the Bills page quick-add, if 
 - Pay buttons, Pay Card / Pay Account amount, "Paid $10 + $150 credit" breakdowns, You Still Owe, Card Unpaid, ready-to-pay, totals footer, bulk pay: all keep using `shareDue` and `cardDue` with the bill's total credit. Total This Month stays the sum of bill amounts.
 - Search page shows the same tags.
 
+### A bill that took a bite and is then itself refunded
+
+Example: rug A ($300) refunded, so credit is $150 each. Replacement rug B ($320) takes the $300 bite, so each deposits $10 and Citi gets $20. Then rug B is returned too and $320 comes back to Citi.
+
+- Record Refund on B works as it does today. The refund is split by B's **full stored shares** ($160 each), not by what people deposited. That is correct: each person put $150 into A and $10 into B, so $160 each is exactly what they're owed, and Citi's negative balance is $320.
+- B's own bite stays put. It was really spent, because B's charge reached Citi. The new refund carries everything back.
+- **Once a bill has a refund recorded, its bite is locked:** no Remove, no amount or split edit, no switch to Check. Otherwise the same money comes back twice, once by returning the bite to A's credit and again through B's refund. *My call.* This also fixes an existing gap: today, if a credit fully covered a bill's shares, the bill can be refunded and then still edited or unapplied (`canEditAmounts` and `unapplyRefund` don't check for refunds).
+- Admin delete of B is already blocked once B's own refund has been used. If B's refund is unused, admin delete is allowed and removes it along with the bite, consistent with the rules below.
+
 ### Changing a bill that has a bite
 
 - **Editing amount or split** while no real money is paid: the bite is removed and goes back to the credit (today's behavior and edit-modal warning, reworded for "credit" rather than one refund). The popup isn't re-offered automatically; it can be applied from history. *Builder's call: re-offering is fine too.*
@@ -161,6 +170,7 @@ Never used, so remove it outright:
 - No "Record Refund" on Check or Paid Directly bills.
 - Switching an unpaid bill with a bite to Check returns the bite. After a real deposit, the switch is blocked with the delete-and-re-add message.
 - Admin delete confirmation renders the three worked examples exactly; delete returns the bite; delete is refused when the card is paid or when the bill's own refund has been bitten.
+- Rug chain: A $300 refunded, B $320 takes the $300 bite, then B is refunded $320. Credit left is $320 ($160 each), and B's bite can't be removed, edited, or switched to Check.
 - Existing applied credits look and behave the same after migration.
 - No "personal card" option or tag anywhere; the column is gone.
 - No emails; other tabs update live.
