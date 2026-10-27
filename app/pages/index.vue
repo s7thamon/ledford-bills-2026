@@ -258,11 +258,15 @@ function openEdit(bill: Bill) {
   <div class="space-y-8">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="flex items-center gap-1">
-        <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" aria-label="Previous month" :class="!canGoBack && 'invisible'" :disabled="!canGoBack" :to="{ query: { month: shiftMonth(month, -1) } }" />
+        <UTooltip text="Previous Month" :delay-duration="0" :content="{ side: 'top' }">
+          <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" aria-label="Previous month" :class="!canGoBack && 'invisible'" :disabled="!canGoBack" :to="{ query: { month: shiftMonth(month, -1) } }" />
+        </UTooltip>
         <h1 class="text-[1.625rem] font-semibold text-highlighted min-w-52 text-center">
           {{ monthLabel(month) }}
         </h1>
-        <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" aria-label="Next month" :class="month >= currentMonth() && 'invisible'" :disabled="month >= currentMonth()" :to="{ query: { month: shiftMonth(month, 1) } }" />
+        <UTooltip text="Next Month" :delay-duration="0" :content="{ side: 'top' }">
+          <UButton icon="i-lucide-chevron-right" color="neutral" variant="ghost" aria-label="Next month" :class="month >= currentMonth() && 'invisible'" :disabled="month >= currentMonth()" :to="{ query: { month: shiftMonth(month, 1) } }" />
+        </UTooltip>
       </div>
 
       <form class="flex flex-wrap items-center gap-3" autocomplete="off" @submit.prevent="createBill">
@@ -287,32 +291,31 @@ function openEdit(bill: Bill) {
     </div>
 
     <div class="grid gap-5 sm:grid-cols-3">
-      <button
-        v-for="stat in stats"
-        :key="stat.title"
-        type="button"
-        class="surface-card flex items-center gap-4 px-6 py-5 text-left cursor-pointer transition hover:ring-2 hover:ring-primary/30"
-        :class="stat.copy && 'ring-2 ring-primary/30 hover:bg-primary/5'"
-        :title="stat.copy ? 'Copy amount' : undefined"
-        @click="stat.copy ? copy(stat.cents) : setTab(stat.tab)"
-      >
-        <div class="icon-tile">
-          <UIcon :name="stat.icon" class="size-5" />
-        </div>
-        <div class="min-w-0">
-          <div class="text-sm font-medium text-toned flex items-center gap-1">
-            {{ stat.title }}
-            <UIcon v-if="stat.copy" name="i-lucide-copy" class="size-3.5" />
+      <UTooltip v-for="stat in stats" :key="stat.title" :text="stat.copy ? 'Copy Amount' : 'Show These Bills'" :delay-duration="0" :content="{ side: 'top' }">
+        <button
+          type="button"
+          class="surface-card flex items-center gap-4 px-6 py-5 text-left cursor-pointer transition hover:ring-2 hover:ring-primary/30"
+          :class="stat.copy && 'ring-2 ring-primary/30 hover:bg-primary/5'"
+          @click="stat.copy ? copy(stat.cents) : setTab(stat.tab)"
+        >
+          <div class="icon-tile">
+            <UIcon :name="stat.icon" class="size-5" />
           </div>
-          <div class="text-[1.625rem] leading-tight font-bold text-highlighted tabular-nums">
-            {{ formatMoney(stat.cents) }}
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-toned flex items-center gap-1">
+              {{ stat.title }}
+              <UIcon v-if="stat.copy" name="i-lucide-copy" class="size-3.5" />
+            </div>
+            <div class="text-[1.625rem] leading-tight font-bold text-highlighted tabular-nums">
+              {{ formatMoney(stat.cents) }}
+            </div>
+            <div v-if="stat.note" class="text-xs font-medium text-primary mt-0.5 flex items-center gap-1">
+              <UIcon v-if="'noteIcon' in stat && stat.noteIcon" :name="stat.noteIcon" class="size-3.5" />
+              {{ stat.note }}
+            </div>
           </div>
-          <div v-if="stat.note" class="text-xs font-medium text-primary mt-0.5 flex items-center gap-1">
-            <UIcon v-if="'noteIcon' in stat && stat.noteIcon" :name="stat.noteIcon" class="size-3.5" />
-            {{ stat.note }}
-          </div>
-        </div>
-      </button>
+        </button>
+      </UTooltip>
     </div>
 
     <div class="surface-card overflow-hidden">
@@ -406,13 +409,13 @@ function openEdit(bill: Bill) {
           @keydown.esc="inline = null"
           @blur="saveInline"
         />
-        <span
-          v-else
-           class="font-semibold text-highlighted"
-          :class="canEditBill(row.original) && 'hover:underline decoration-dotted cursor-text'"
-          :title="canEditBill(row.original) ? 'Click to rename' : undefined"
-          @click="canEditBill(row.original) && ($event.stopPropagation(), startInline(row.original, 'name'))"
-        >{{ row.original.name }}</span>
+        <UTooltip v-else text="Click to Rename" :disabled="!canEditBill(row.original)" :delay-duration="0" :content="{ side: 'top' }">
+          <span
+            class="font-semibold text-highlighted"
+            :class="canEditBill(row.original) && 'hover:underline decoration-dotted cursor-text'"
+            @click="canEditBill(row.original) && ($event.stopPropagation(), startInline(row.original, 'name'))"
+          >{{ row.original.name }}</span>
+        </UTooltip>
         <UTooltip v-if="row.original.refunds.length" :text="refundTip(row.original)" :delay-duration="0" :content="{ side: 'top' }">
           <UBadge as="button" color="error" variant="soft" class="ms-2 align-middle" @click.stop="goToMonth(row.original.refunds[0]?.appliedToAddedOn ?? null)">
             ↩ Refunded −{{ formatMoney(refundedCents(row.original)) }}
@@ -438,13 +441,18 @@ function openEdit(bill: Bill) {
           @keydown.esc="inline = null"
           @blur="saveInline"
         />
-        <span
+        <UTooltip
           v-else
-          class="tabular-nums"
-          :class="[canInlineAmount(row.original) && 'hover:underline decoration-dotted cursor-text', fullyRefunded(row.original) && 'line-through text-muted']"
-          :title="canInlineAmount(row.original) ? 'Click to change (resets to an even split)' : row.original.credit && canEditBill(row.original) ? 'Has a refund credit; change it from Edit' : undefined"
-          @click="canInlineAmount(row.original) && ($event.stopPropagation(), startInline(row.original, 'amount'))"
-        >{{ formatMoney(row.original.amountCents) }}</span>
+          :text="canInlineAmount(row.original) ? 'Click to Change · Resets to an Even Split' : 'Has a refund credit; change it from Edit'"
+          :disabled="!canInlineAmount(row.original) && !(row.original.credit && canEditBill(row.original))"
+          :delay-duration="0" :content="{ side: 'top' }"
+        >
+          <span
+            class="tabular-nums"
+            :class="[canInlineAmount(row.original) && 'hover:underline decoration-dotted cursor-text', fullyRefunded(row.original) && 'line-through text-muted']"
+            @click="canInlineAmount(row.original) && ($event.stopPropagation(), startInline(row.original, 'amount'))"
+          >{{ formatMoney(row.original.amountCents) }}</span>
+        </UTooltip>
       </template>
 
       <template #share-cell="{ row }">

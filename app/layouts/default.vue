@@ -113,13 +113,15 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
         <!-- The saved preference lives in localStorage, so the server can't render the right icon. -->
         <ClientOnly>
           <UDropdownMenu :items="themeMenu" :content="{ align: 'end' }">
-            <UButton :icon="themeIcon" color="neutral" variant="ghost" class="rounded-full" :aria-label="`Theme: ${colorMode.preference}`" />
+            <UTooltip text="Theme" :content="{ side: 'bottom' }">
+              <UButton :icon="themeIcon" color="neutral" variant="ghost" class="rounded-full" :aria-label="`Theme: ${colorMode.preference}`" />
+            </UTooltip>
           </UDropdownMenu>
           <template #fallback>
             <div class="size-9" />
           </template>
         </ClientOnly>
-        <UTooltip :text="adminMode ? 'Admin mode on: you can mark anyone paid' : 'Admin mode'">
+        <UTooltip :text="adminMode ? 'Admin Mode On · You Can Mark Anyone Paid' : 'Admin Mode'" :content="{ side: 'bottom' }">
           <UButton
             :icon="adminMode ? 'i-lucide-lock-open' : 'i-lucide-lock'"
             :color="adminMode ? 'primary' : 'neutral'"
@@ -132,7 +134,7 @@ const userMenu = computed<DropdownMenuItem[][]>(() => [
         </UTooltip>
         <UDropdownMenu :items="userMenu" :content="{ align: 'end' }">
           <UButton color="neutral" variant="ghost" class="rounded-full p-1" :aria-label="`User menu, ${connected ? 'live updates on' : 'reconnecting'}`">
-            <UTooltip :text="connected ? 'Live updates on' : 'Reconnecting…'">
+            <UTooltip :text="connected ? 'Live Updates On' : 'Reconnecting…'" :content="{ side: 'bottom' }">
               <UChip :color="connected ? 'success' : 'warning'" position="bottom-right" inset>
                 <UAvatar :text="initials" size="sm" class="bg-primary/10 text-primary font-semibold" />
               </UChip>

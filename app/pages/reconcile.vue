@@ -477,7 +477,9 @@ const money = (cents: number) => (cents < 0 ? '−' : '') + formatMoney(Math.abs
               <div v-if="assigned[b.id]" class="mt-1.5 flex flex-wrap gap-1.5">
                 <span v-for="id in assigned[b.id]" :key="id" class="inline-flex items-center gap-1 rounded-full border border-default bg-default ps-2.5 pe-1 py-0.5 text-xs tabular-nums">
                   {{ titleCase(storeKey(line(id).description)) }} · {{ formatMoney(line(id).amountCents) }}
-                  <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" class="rounded-full p-0.5" :aria-label="`Send ${formatMoney(line(id).amountCents)} back`" @click.stop="sendBack(b.id, id)" />
+                  <UTooltip text="Send Back to the Statement" :content="{ side: 'top' }">
+                    <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" class="rounded-full p-0.5" :aria-label="`Send ${formatMoney(line(id).amountCents)} back`" @click.stop="sendBack(b.id, id)" />
+                  </UTooltip>
                 </span>
               </div>
               <div v-else class="mt-2" @click.stop>

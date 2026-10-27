@@ -170,28 +170,27 @@ function openEdit(item: Item) {
     </div>
 
     <div class="grid gap-5 sm:grid-cols-3">
-      <button
-        v-for="stat in stats"
-        :key="stat.title"
-        type="button"
-        class="surface-card flex items-center gap-4 px-6 py-5 text-left cursor-pointer transition hover:ring-2 hover:ring-primary/30"
-        :class="selected.length > 0 && 'ring-2 ring-primary/30 hover:bg-primary/5'"
-        :title="selected.length ? 'Copy amount' : 'Select these in the table'"
-        @click="clickStat(stat)"
-      >
-        <div class="icon-tile">
-          <UIcon :name="stat.icon" class="size-5" />
-        </div>
-        <div class="min-w-0">
-          <div class="text-sm font-medium text-toned flex items-center gap-1">
-            {{ stat.title }}
-            <UIcon v-if="selected.length" name="i-lucide-copy" class="size-3.5" />
+      <UTooltip v-for="stat in stats" :key="stat.title" :text="selected.length ? 'Copy Amount' : 'Select These Rows'" :content="{ side: 'top' }">
+        <button
+          type="button"
+          class="surface-card flex items-center gap-4 px-6 py-5 text-left cursor-pointer transition hover:ring-2 hover:ring-primary/30"
+          :class="selected.length > 0 && 'ring-2 ring-primary/30 hover:bg-primary/5'"
+          @click="clickStat(stat)"
+        >
+          <div class="icon-tile">
+            <UIcon :name="stat.icon" class="size-5" />
           </div>
-          <div class="text-[1.625rem] leading-tight font-bold text-highlighted tabular-nums">
-            {{ formatMoney(stat.cents) }}
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-toned flex items-center gap-1">
+              {{ stat.title }}
+              <UIcon v-if="selected.length" name="i-lucide-copy" class="size-3.5" />
+            </div>
+            <div class="text-[1.625rem] leading-tight font-bold text-highlighted tabular-nums">
+              {{ formatMoney(stat.cents) }}
+            </div>
           </div>
-        </div>
-      </button>
+        </button>
+      </UTooltip>
     </div>
 
     <div class="surface-card overflow-hidden">

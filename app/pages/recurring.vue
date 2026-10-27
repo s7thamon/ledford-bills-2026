@@ -127,12 +127,18 @@ function openEdit(item: Item) {
           </span>
         </template>
         <template #active-cell="{ row }">
-          <USwitch :model-value="row.original.active" :aria-label="`Active: ${row.original.name}`" @update:model-value="v => setActive(row.original, v)" />
+          <UTooltip :text="row.original.active ? 'Pause' : 'Resume'" :content="{ side: 'top' }">
+            <USwitch :model-value="row.original.active" :aria-label="`Active: ${row.original.name}`" @update:model-value="v => setActive(row.original, v)" />
+          </UTooltip>
         </template>
         <template #order-cell="{ row }">
           <div v-if="isGrouped(row.original)" class="inline-flex">
-            <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="ghost" :class="isFirst(row.original) && 'invisible'" :disabled="isFirst(row.original)" aria-label="Move up" @click="move(row.original, -1)" />
-            <UButton icon="i-lucide-chevron-down" size="xs" color="neutral" variant="ghost" :class="isLast(row.original) && 'invisible'" :disabled="isLast(row.original)" aria-label="Move down" @click="move(row.original, 1)" />
+            <UTooltip text="Move Up" :content="{ side: 'top' }">
+              <UButton icon="i-lucide-chevron-up" size="xs" color="neutral" variant="ghost" :class="isFirst(row.original) && 'invisible'" :disabled="isFirst(row.original)" aria-label="Move up" @click="move(row.original, -1)" />
+            </UTooltip>
+            <UTooltip text="Move Down" :content="{ side: 'top' }">
+              <UButton icon="i-lucide-chevron-down" size="xs" color="neutral" variant="ghost" :class="isLast(row.original) && 'invisible'" :disabled="isLast(row.original)" aria-label="Move down" @click="move(row.original, 1)" />
+            </UTooltip>
           </div>
         </template>
         <template #actions-cell="{ row }">
