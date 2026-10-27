@@ -120,12 +120,9 @@ const openMonth = (month: string) => router.push({ path: '/', query: { month } }
 
     <div class="grid gap-5 lg:grid-cols-2">
       <div class="surface-card p-5 space-y-3 min-w-0">
-        <div class="flex items-baseline justify-between gap-3">
-          <h2 class="font-semibold text-highlighted">
-            Top 10 Stores
-          </h2>
-          <span class="text-xs text-muted">"Costco - Meds" counts as Costco</span>
-        </div>
+        <h2 class="font-semibold text-highlighted">
+          Top 10 Stores
+        </h2>
         <p v-if="!stores.length && status !== 'pending'" class="text-sm text-muted">
           No bills in this range.
         </p>
