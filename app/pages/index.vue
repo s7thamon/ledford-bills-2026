@@ -81,8 +81,7 @@ const tabItems = computed(() => [
   { label: 'All', value: 'all', badge: counts.value.all },
   { label: `${myName.value} Unpaid`, value: 'mine', badge: counts.value.mine },
   { label: `${partnerName.value} Unpaid`, value: 'theirs', badge: counts.value.theirs },
-  { label: 'Card Unpaid', value: 'card', badge: counts.value.card },
-  { label: 'Ready for Card', value: 'ready', badge: counts.value.ready }
+  { label: 'Card Unpaid', value: 'card', badge: counts.value.card }
 ].map(item => ({ ...item, badge: { label: String(item.badge), size: 'sm' as const, color: (tab.value === item.value ? 'primary' : 'neutral') as 'primary' | 'neutral', variant: 'soft' as const } })))
 
 // Amounts
@@ -110,7 +109,7 @@ const stats = computed(() => {
   return [
     { title: hasSelection.value ? 'Selected Total' : 'Total This Month', icon: 'i-lucide-receipt-text', cents: total(list), copy: hasSelection.value, tab: 'all' as BillTab, note: hasSelection.value ? '' : vsLastMonth.value, noteIcon: lastMonthDiff.value > 0 ? 'i-lucide-trending-up' : lastMonthDiff.value < 0 ? 'i-lucide-trending-down' : '' },
     { title: hasSelection.value ? 'Selected Unpaid for You' : 'You Still Owe', icon: 'i-lucide-user-round', cents: myUnpaid(list), copy: hasSelection.value, tab: 'mine' as BillTab, note: hasSelection.value ? '' : users.value.filter(u => u.id !== me.value).map(u => `${u.name.split(' ')[0]} owes ${formatMoney(unpaidFor(list, u.id))}`).join(' · ') },
-    { title: 'Card Unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, tab: 'ready' as BillTab, note: readyForCardCents(list) ? `${formatMoney(readyForCardCents(list))} ready to pay` : '' }
+    { title: 'Card Unpaid', icon: 'i-lucide-credit-card', cents: cardUnpaidTotal(list), copy: false, tab: 'card' as BillTab, note: readyForCardCents(list) ? `${formatMoney(readyForCardCents(list))} ready to pay` : '' }
   ]
 })
 
@@ -152,7 +151,7 @@ const banks = [
   { label: 'Citi', url: 'https://www.citi.com', icon: '/banks/citi.png' }
 ]
 
-// Totals for whatever the active tab shows, e.g. exactly what Ready for Card will put on the card.
+// Totals for whatever the active tab shows.
 const footerMoney = (cents: number) => rows.value.length ? h('span', { class: 'text-highlighted tabular-nums' }, formatMoney(cents)) : ''
 
 const columns = computed<TableColumn<Bill>[]>(() => [
@@ -203,44 +202,8 @@ const payCard = (bill: Bill) =>
   act(`card:${bill.id}`, () => $fetch(`/api/bills/${bill.id}/card-paid`, { method: 'POST' }), 'Card marked paid')
 const paySelected = (target: 'me' | 'card') =>
   act(`bulk:${target}`, () => $fetch('/api/bills/pay-selected', { method: 'POST', body: { ids: selected.value, target } }), target === 'me' ? 'Selected bills marked paid' : 'Selected card payments marked paid')
-const readyIds = computed(() => bills.value.filter(canMarkCardPaid).map(b => b.id))
-const confirmPayAll = ref(false)
-watch(tab, () => (confirmPayAll.value = false))
-async function payAllReady() {
-  confirmPayAll.value = false
-  await act('bulk:ready', () => $fetch('/api/bills/pay-selected', { method: 'POST', body: { ids: readyIds.value, target: 'card' } }), 'Card marked paid for all ready bills')
-}
 const canPaySelectedMe = computed(() => myUnpaid(selectedBills.value) > 0)
 const canPaySelectedCard = computed(() => selectedBills.value.some(canMarkCardPaid))
-
-// Inline edit
-const inline = ref<{ id: number, field: 'name' | 'amount', value: string } | null>(null)
-// The amount a credit was sized for must change through the edit modal, which warns first.
-const canInlineAmount = (bill: Bill) => canEditBill(bill) && !bill.credit
-
-function startInline(bill: Bill, field: 'name' | 'amount') {
-  if (!canEditBill(bill)) return
-  inline.value = { id: bill.id, field, value: field === 'name' ? bill.name : moneyNumber(bill.amountCents) }
-}
-async function saveInline() {
-  const edit = inline.value
-  inline.value = null
-  if (!edit) return
-  const bill = bills.value.find(b => b.id === edit.id)
-  if (!bill) return
-  let body: { name: string } | { amountCents: number }
-  if (edit.field === 'name') {
-    const name = edit.value.trim()
-    if (!name || name === bill.name) return
-    body = { name }
-  }
-  else {
-    const amountCents = parseAmount(edit.value)
-    if (amountCents <= 0 || amountCents === bill.amountCents) return
-    body = { amountCents }
-  }
-  await act(`inline:${bill.id}`, () => $fetch(`/api/bills/${bill.id}`, { method: 'PATCH', body }), 'Bill updated')
-}
 
 // Modal
 const editOpen = ref(false)
@@ -341,20 +304,6 @@ function openEdit(bill: Bill) {
           </UButton>
         </div>
         <UInput v-if="tab === 'all' && !hasSelection" v-model="search" icon="i-lucide-search" :placeholder="`Search ${monthLabel(month).split(' ')[0]}`" :aria-label="`Search ${monthLabel(month)} bills by name or amount`" size="sm" class="w-48" :class="!refunds.length && 'ms-auto'" />
-        <template v-if="tab === 'ready' && !hasSelection && readyIds.length">
-          <UButton v-if="!confirmPayAll" size="sm" class="rounded-full px-4 ms-auto" icon="i-lucide-credit-card" @click="confirmPayAll = true">
-            Pay Card for All {{ readyIds.length }} · {{ formatMoney(readyForCardCents(bills)) }}
-          </UButton>
-          <template v-else>
-            <span class="text-sm text-toned ms-auto">Mark {{ readyIds.length }} card payments paid?</span>
-            <UButton size="sm" class="rounded-full px-4" :loading="busy === 'bulk:ready'" @click="payAllReady">
-              Confirm
-            </UButton>
-            <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="confirmPayAll = false">
-              Cancel
-            </UButton>
-          </template>
-        </template>
         <template v-if="hasSelection">
           <span class="text-sm text-muted ms-auto">{{ selected.length }} selected</span>
           <UButton v-if="canPaySelectedMe" size="sm" variant="outline" class="rounded-full" :loading="busy === 'bulk:me'" @click="paySelected('me')">
@@ -396,24 +345,7 @@ function openEdit(bill: Bill) {
       </template>
 
       <template #name-cell="{ row }">
-        <UInput
-          v-if="inline?.id === row.original.id && inline.field === 'name'"
-          v-model="inline.value"
-          size="sm"
-          autofocus
-          class="w-full"
-          @click.stop
-          @keydown.enter.prevent="saveInline"
-          @keydown.esc="inline = null"
-          @blur="saveInline"
-        />
-        <UTooltip v-else text="Click to Rename" :disabled="!canEditBill(row.original)" :delay-duration="0" :content="{ side: 'top' }">
-          <span
-            class="font-semibold text-highlighted"
-            :class="canEditBill(row.original) && 'hover:underline decoration-dotted cursor-text'"
-            @click="canEditBill(row.original) && ($event.stopPropagation(), startInline(row.original, 'name'))"
-          >{{ row.original.name }}</span>
-        </UTooltip>
+        <span class="font-semibold text-highlighted">{{ row.original.name }}</span>
         <UTooltip v-if="row.original.refunds.length" :text="refundTip(row.original)" :delay-duration="0" :content="{ side: 'top' }">
           <UBadge as="button" color="error" variant="soft" class="ms-2 align-middle" @click.stop="goToMonth(row.original.refunds[0]?.uses[0]?.billAddedOn ?? null)">
             ↩ Refunded −{{ formatMoney(refundedCents(row.original)) }}
@@ -427,30 +359,7 @@ function openEdit(bill: Bill) {
       </template>
 
       <template #amountCents-cell="{ row }">
-        <UInput
-          v-if="inline?.id === row.original.id && inline.field === 'amount'"
-          v-model="inline.value"
-          size="sm"
-          inputmode="decimal"
-          autofocus
-          class="w-28 ms-auto"
-          @click.stop
-          @keydown.enter.prevent="saveInline"
-          @keydown.esc="inline = null"
-          @blur="saveInline"
-        />
-        <UTooltip
-          v-else
-          :text="canInlineAmount(row.original) ? 'Click to Change · Resets to an Even Split' : 'Has a refund credit; change it from Edit'"
-          :disabled="!canInlineAmount(row.original) && !(row.original.credit && canEditBill(row.original))"
-          :delay-duration="0" :content="{ side: 'top' }"
-        >
-          <span
-            class="tabular-nums"
-            :class="[canInlineAmount(row.original) && 'hover:underline decoration-dotted cursor-text', fullyRefunded(row.original) && 'line-through text-muted']"
-            @click="canInlineAmount(row.original) && ($event.stopPropagation(), startInline(row.original, 'amount'))"
-          >{{ formatMoney(row.original.amountCents) }}</span>
-        </UTooltip>
+        <span class="tabular-nums" :class="fullyRefunded(row.original) && 'line-through text-muted'">{{ formatMoney(row.original.amountCents) }}</span>
       </template>
 
       <template #share-cell="{ row }">

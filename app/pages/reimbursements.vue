@@ -130,6 +130,17 @@ async function act(key: string, url: string, success: string) {
   busy.value = null
   if (ok) await refresh()
 }
+// Bulk actions only send the selected rows each step applies to.
+const selectedItems = computed(() => data.value.items.filter(i => selected.value.includes(i.id)))
+const sendIds = computed(() => selectedItems.value.filter(canSend).map(i => i.id))
+const confirmIds = computed(() => selectedItems.value.filter(canConfirm).map(i => i.id))
+async function markSelected(step: 'sent' | 'received') {
+  busy.value = `bulk:${step}`
+  const ids = step === 'sent' ? sendIds.value : confirmIds.value
+  const ok = await run(() => $fetch('/api/reimbursements/mark-selected', { method: 'POST', body: { ids, step } }), step === 'sent' ? 'Selected marked sent' : 'Selected marked received')
+  busy.value = null
+  if (ok) await refresh()
+}
 
 const columns: TableColumn<Item>[] = [
   { accessorKey: 'createdAt', header: 'Added', meta: { class: { td: 'order-4 max-md:text-xs' } } },
@@ -207,6 +218,12 @@ function openEdit(item: Item) {
         />
         <template v-if="selected.length">
           <span class="text-sm text-muted ms-auto">{{ selected.length }} selected</span>
+          <UButton v-if="sendIds.length" size="sm" variant="outline" class="rounded-full" :loading="busy === 'bulk:sent'" @click="markSelected('sent')">
+            Mark Selected Sent ({{ sendIds.length }})
+          </UButton>
+          <UButton v-if="confirmIds.length" size="sm" variant="outline" class="rounded-full" :loading="busy === 'bulk:received'" @click="markSelected('received')">
+            Confirm Selected Received ({{ confirmIds.length }})
+          </UButton>
           <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="selected = []">
             Clear
           </UButton>

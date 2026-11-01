@@ -1,8 +1,8 @@
 import { canMarkCardPaid, onSharedCard, type BillLike } from './rules'
 import { cardDue } from './credits'
 
-export type BillTab = 'all' | 'mine' | 'theirs' | 'card' | 'ready'
-export const BILL_TABS: BillTab[] = ['all', 'mine', 'theirs', 'card', 'ready']
+export type BillTab = 'all' | 'mine' | 'theirs' | 'card'
+export const BILL_TABS: BillTab[] = ['all', 'mine', 'theirs', 'card']
 
 export const isBillTab = (v: unknown): v is BillTab => BILL_TABS.includes(v as BillTab)
 
@@ -10,7 +10,6 @@ export function billInTab(bill: BillLike, tab: BillTab, userId: number): boolean
   if (tab === 'mine') return bill.participants.some(p => p.userId === userId && !p.paidAt)
   if (tab === 'theirs') return bill.participants.some(p => p.userId !== userId && !p.paidAt)
   if (tab === 'card') return !bill.cardPaidAt && onSharedCard(bill)
-  if (tab === 'ready') return canMarkCardPaid(bill)
   return true
 }
 

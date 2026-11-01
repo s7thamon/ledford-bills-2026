@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, isNull, like, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNull, like, or, sql, type SQL } from 'drizzle-orm'
 import { createError } from 'h3'
 import { schema, useDb } from '../db/client'
 import { canEditReimbursement, canMarkReimbursementComplete, canMarkTransferComplete, reimbursementStatus } from '../../shared/utils/rules'
@@ -119,4 +119,19 @@ export async function markReimbursementComplete(id: number, userId: number, admi
   if (!allowed) throw createError({ statusCode: 403, statusMessage: 'Only the person owed can confirm receipt, after payment is sent.' })
   await useDb().update(reimbursements).set({ completedAt: new Date() }).where(eq(reimbursements.id, id))
   return row
+}
+
+/** Bulk Mark Sent or Confirm Received; rows the actor can't move are skipped. Returns the rows changed. */
+export async function markSelected(ids: number[], userId: number, adminMode: boolean, step: 'sent' | 'received') {
+  if (!ids.length) return []
+  const db = useDb()
+  const rows = (await db.select().from(reimbursements).where(inArray(reimbursements.id, ids))).filter(r => step === 'sent'
+    ? canMarkTransferComplete(r, userId) || (adminMode && reimbursementStatus(r) === 'awaiting')
+    : canMarkReimbursementComplete(r, userId) || (adminMode && reimbursementStatus(r) === 'sent'))
+  if (!rows.length) return []
+  await db.update(reimbursements)
+    .set(step === 'sent' ? { transferCompletedAt: new Date() } : { completedAt: new Date() })
+    .where(inArray(reimbursements.id, rows.map(r => r.id)))
+  if (step === 'sent') for (const r of rows) await notify.transferCompleted(r)
+  return rows
 }

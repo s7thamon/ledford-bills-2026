@@ -13,7 +13,6 @@ describe('different card and credits in rules', () => {
   it('treats a check bill as off the card', () => {
     const check = { amountCents: 1000, cardPaidAt: null, paidByCheck: true, participants: [p(1, true), p(2, true)] }
     expect(canMarkCardPaid(check)).toBe(false)
-    expect(billInTab(check, 'ready', 1)).toBe(false)
     expect(billInTab(check, 'card', 1)).toBe(false)
     expect(cardUnpaidCents([check])).toBe(0)
   })
@@ -184,14 +183,14 @@ describe('bill view', () => {
     { amountCents: 3000, cardPaidAt: '2026-10-02', participants: [p(1, true), p(2, true)] }
   ]
   it('counts tabs', () => {
-    expect(tabCounts(bills, 1)).toEqual({ all: 3, mine: 1, theirs: 0, card: 2, ready: 1 })
-    expect(tabCounts(bills, 2)).toEqual({ all: 3, mine: 0, theirs: 1, card: 2, ready: 1 })
-    expect(tabCounts([], 1)).toEqual({ all: 0, mine: 0, theirs: 0, card: 0, ready: 0 })
+    expect(tabCounts(bills, 1)).toEqual({ all: 3, mine: 1, theirs: 0, card: 2 })
+    expect(tabCounts(bills, 2)).toEqual({ all: 3, mine: 0, theirs: 1, card: 2 })
+    expect(tabCounts([], 1)).toEqual({ all: 0, mine: 0, theirs: 0, card: 0 })
   })
   it('filters by tab', () => {
-    expect(bills.filter(b => billInTab(b, 'ready', 1))).toEqual([bills[1]])
+    expect(bills.filter(b => billInTab(b, 'card', 1))).toEqual([bills[0], bills[1]])
     expect(bills.filter(b => billInTab(b, 'theirs', 2))).toEqual([bills[0]])
-    expect(isBillTab('ready')).toBe(true)
+    expect(isBillTab('ready')).toBe(false)
     expect(isBillTab('theirs')).toBe(true)
     expect(isBillTab('nope')).toBe(false)
   })

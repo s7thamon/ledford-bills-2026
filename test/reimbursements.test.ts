@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { countWaitingOn, createReimbursement, deleteReimbursement, listReimbursements, markReimbursementComplete, markTransferComplete, updateReimbursement } from '../server/services/reimbursements'
+import { countWaitingOn, createReimbursement, deleteReimbursement, listReimbursements, markReimbursementComplete, markSelected, markTransferComplete, updateReimbursement } from '../server/services/reimbursements'
 import { sentMail } from '../server/utils/mail'
 import { expectHttpError, flushMail, resetDb, seedUsers } from './helpers'
 
@@ -47,6 +47,16 @@ describe('reimbursements', () => {
     const r = await createReimbursement({ name: 'Tolls', owedCents: 900, createdBy: tim })
     await markTransferComplete(r.id, tim, true)
     await markReimbursementComplete(r.id, kelly, true)
+  })
+
+  it('marks selected rows sent then received, skipping ones the actor cannot move', async () => {
+    const a = await createReimbursement({ name: 'A', owedCents: 100, createdBy: tim })
+    const b = await createReimbursement({ name: 'B', owedCents: 200, createdBy: tim })
+    const mine = await createReimbursement({ name: 'Mine', owedCents: 300, createdBy: kelly })
+    expect((await markSelected([a.id, b.id, mine.id], kelly, false, 'sent')).map(r => r.name)).toEqual(['A', 'B'])
+    expect(await markSelected([a.id, b.id], kelly, false, 'received')).toEqual([])
+    expect((await markSelected([a.id, b.id, mine.id], tim, false, 'received')).map(r => r.name)).toEqual(['A', 'B'])
+    expect((await listReimbursements({ resolved: false, page: 1, sort: 'name', dir: 'asc' })).items.map(r => r.name)).toEqual(['Mine'])
   })
 
   it('only the creator edits or deletes, before payment', async () => {
