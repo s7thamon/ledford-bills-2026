@@ -56,4 +56,15 @@ describe('recurring', () => {
     await moveRecurring(a.id, -1)
     expect((await listRecurring()).map(r => r.name)).toEqual(['A', 'B'])
   })
+
+  it('adds bills so the month reads in the Recurring page order', async () => {
+    for (const name of ['Ledford Mortgage', 'Ledford Mortgage - Principal', 'Netflix', 'T-Mobile', 'Apple One']) await createRecurring(bill(name, 1), tim)
+    const order = (await listRecurring()).map(r => r.name)
+    expect(order).toEqual(['Apple One', 'T-Mobile', 'Netflix', 'Ledford Mortgage - Principal', 'Ledford Mortgage'])
+    await generateRecurring('2026-11-01')
+    const added = await listBills({ month: '2026-11', userId: tim })
+    // Newest first: the first one added (the mortgage) is at the bottom.
+    expect(added.map(b => b.name)).toEqual(order)
+    expect(added.at(-1)!.id).toBe(Math.min(...added.map(b => b.id)))
+  })
 })

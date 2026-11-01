@@ -172,7 +172,8 @@ export async function generateRecurring(today = todayIso()): Promise<number> {
 
   const templates = await db.query.recurringBills.findMany({ where: eq(recurringBills.active, true), orderBy: order, with: { participants: true } })
 
-  for (const t of templates) {
+  // Bills list newest first, so create bottom-up: the month's table then reads in the Recurring page's order.
+  for (const t of templates.toReversed()) {
     if (Math.min(t.dayOfMonth, lastDay) !== day) continue
 
     if (t.type === 'reimbursement') {
