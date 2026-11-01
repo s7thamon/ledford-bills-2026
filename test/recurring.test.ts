@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createRecurring, generateRecurring, listRecurring, moveRecurring, setRecurringActive, updateRecurring } from '../server/services/recurring'
 import { listBills } from '../server/services/bills'
 import { listReimbursements } from '../server/services/reimbursements'
+import { todayIso } from '../shared/utils/dates'
 import { resetDb, seedUsers } from './helpers'
 
 let tim: number, kelly: number
@@ -40,9 +41,11 @@ describe('recurring', () => {
   })
 
   it('creates recurring reimbursements owed by the chosen user', async () => {
-    await createRecurring({ type: 'reimbursement', name: 'Phone', amountCents: 4000, dayOfMonth: 1, otherUserId: kelly }, kelly)
-    expect(await generateRecurring('2026-10-01')).toBe(1)
-    expect(await generateRecurring('2026-10-01')).toBe(0)
+    // Reimbursements are deduped on created_at, which is the real clock, so run on the real today.
+    const today = todayIso()
+    await createRecurring({ type: 'reimbursement', name: 'Phone', amountCents: 4000, dayOfMonth: Number(today.slice(8, 10)), otherUserId: kelly }, kelly)
+    expect(await generateRecurring(today)).toBe(1)
+    expect(await generateRecurring(today)).toBe(0)
     const { items } = await listReimbursements({ resolved: false, page: 1, sort: 'createdAt', dir: 'desc' })
     expect(items[0]).toMatchObject({ name: 'Phone', createdBy: tim, otherUserId: kelly, owedCents: 4000 })
   })

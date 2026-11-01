@@ -71,7 +71,16 @@ export async function sendMail(message: MailMessage): Promise<void> {
   await transporter.sendMail({ from: process.env.MAIL_FROM ?? 'Ledford Bills <bills@localhost>', to: message.to, subject: message.subject, text, html })
 }
 
-/** Mail must never break the request that triggered it. */
+let mailQueue = Promise.resolve()
+
+/**
+ * Mail must never break the request that triggered it. Sent one at a time, a second apart, so inboxes show them in
+ * the order they happened: parallel SMTP sends race, and the Date header only has whole seconds.
+ */
 export function queueMail(message: MailMessage): void {
-  sendMail(message).catch(error => console.error('[mail] failed', message.subject, error))
+  const gapMs = process.env.MAIL_TRANSPORT === 'memory' ? 0 : 1000
+  mailQueue = mailQueue
+    .then(() => sendMail(message))
+    .catch(error => console.error('[mail] failed', message.subject, error))
+    .then(() => new Promise(r => setTimeout(r, gapMs)))
 }

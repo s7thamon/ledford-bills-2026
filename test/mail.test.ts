@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { renderMailHtml } from '../server/utils/mail'
+import { queueMail, renderMailHtml, sentMail } from '../server/utils/mail'
+import { flushMail } from './helpers'
+
+describe('mail queue', () => {
+  it('sends in the order queued', async () => {
+    sentMail.length = 0
+    for (const subject of ['Mortgage', 'Principal', 'Netflix']) queueMail({ to: 'tim@example.com', subject, lines: [] })
+    await flushMail()
+    expect(sentMail.map(m => m.subject)).toEqual(['Mortgage', 'Principal', 'Netflix'])
+  })
+})
 
 describe('mail html', () => {
   const html = renderMailHtml({
