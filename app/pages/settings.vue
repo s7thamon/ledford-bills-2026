@@ -120,7 +120,7 @@ const fmtDate = (d: string) => new Date(d).toLocaleString('en-US', { dateStyle: 
           Card Owner
         </h2>
         <p class="text-sm text-muted">
-          Gets the "card ready to pay" email once everyone has paid a bill.
+          Gets the "card ready to pay" (or "account ready to pay") email once everyone has paid a bill.
         </p>
       </template>
       <USelect :model-value="cardOwnerId" :items="userItems" placeholder="Nobody" class="w-64" @update:model-value="v => setCardOwner(Number(v))" />

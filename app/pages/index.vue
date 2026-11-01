@@ -192,7 +192,7 @@ async function createBill(hold?: boolean) {
     await refreshHeld()
     return
   }
-  const bill = await run(() => $fetch('/api/bills', { method: 'POST', body: { name: form.name, amountCents } }), 'Bill created')
+  const bill = await run(() => $fetch('/api/bills', { method: 'POST', body: { name: form.name, amountCents } }), 'Bill added')
   creating.value = false
   if (!bill) return
   form.name = ''
@@ -216,11 +216,12 @@ async function act(key: string, action: () => Promise<unknown>, success: string)
 const payFor = (bill: Bill, userId: number) =>
   act(`pay:${bill.id}:${userId}`, () => $fetch(`/api/bills/${bill.id}/pay`, { method: 'POST', body: { userId } }), 'Marked as paid')
 const payCard = (bill: Bill) =>
-  act(`card:${bill.id}`, () => $fetch(`/api/bills/${bill.id}/card-paid`, { method: 'POST' }), 'Card marked paid')
+  act(`card:${bill.id}`, () => $fetch(`/api/bills/${bill.id}/card-paid`, { method: 'POST' }), `${isDirectPay(bill) ? 'Account' : 'Card'} marked paid`)
 const paySelected = (target: 'me' | 'card') =>
-  act(`bulk:${target}`, () => $fetch('/api/bills/pay-selected', { method: 'POST', body: { ids: selected.value, target } }), target === 'me' ? 'Selected bills marked paid' : 'Selected card payments marked paid')
+  act(`bulk:${target}`, () => $fetch('/api/bills/pay-selected', { method: 'POST', body: { ids: selected.value, target } }), target === 'me' ? 'Selected bills marked paid' : `Selected ${selectedPayTarget.value} payments marked paid`)
 const canPaySelectedMe = computed(() => myUnpaid(selectedBills.value) > 0)
 const canPaySelectedCard = computed(() => selectedBills.value.some(canMarkCardPaid))
+const selectedPayTarget = computed(() => payTarget(selectedBills.value.filter(canMarkCardPaid).map(b => b.name), directPay.value))
 
 // Held for next month
 const { data: held, refresh: refreshHeld } = await useFetch('/api/held-bills', { key: 'held-bills', default: () => [] })
@@ -373,7 +374,7 @@ function openEdit(bill: Bill) {
             Pay Selected ({{ myName }})
           </UButton>
           <UButton v-if="canPaySelectedCard" size="sm" variant="outline" class="rounded-full" :loading="busy === 'bulk:card'" @click="paySelected('card')">
-            Pay Selected Card
+            Pay Selected {{ selectedPayTarget.replace(/\b\w/g, c => c.toUpperCase()) }}
           </UButton>
           <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="selected = []">
             Clear

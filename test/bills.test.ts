@@ -94,10 +94,10 @@ describe('bills', () => {
   it('bulk pays my shares and then the card', async () => {
     const a = await createBill({ name: 'A', amountCents: 1000, createdBy: tim })
     const b = await createBill({ name: 'B', amountCents: 1000, createdBy: tim })
-    expect(await paySelected([a.id, b.id], tim, 'me')).toBe(2)
-    expect(await paySelected([a.id, b.id], tim, 'card')).toBe(0)
+    expect(await paySelected([a.id, b.id], tim, 'me')).toEqual(['A', 'B'])
+    expect(await paySelected([a.id, b.id], tim, 'card')).toEqual([])
     await markParticipantPaid(a.id, kelly, kelly, false)
-    expect(await paySelected([a.id, b.id], tim, 'card')).toBe(1)
+    expect(await paySelected([a.id, b.id], tim, 'card')).toEqual(['A'])
     expect((await getBill(a.id)).cardPaidAt).not.toBeNull()
   })
 

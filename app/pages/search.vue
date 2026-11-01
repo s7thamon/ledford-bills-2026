@@ -10,6 +10,8 @@ const { user } = useUserSession()
 const { data: users } = await useFetch('/api/users', { key: 'users', default: () => [] })
 const { data: results, status } = await useFetch('/api/bills/search', { key: 'search', query: computed(() => ({ q: q.value })), default: () => [] })
 type Bill = (typeof results.value)[number]
+// Paid Directly bills (the mortgage) are paid from the shared account, not the card.
+const { data: directPay } = await useFetch('/api/settings/direct-pay', { default: () => [] as string[] })
 
 const share = (bill: Bill) => isCustomSplit(bill.participants.map(p => p.amountCents))
   ? bill.participants.find(p => p.userId === user.value?.id)?.amountCents ?? 0
@@ -199,7 +201,7 @@ const columns: TableColumn<Bill>[] = [
             Check
           </UBadge>
           <UBadge v-else-if="allParticipantsPaid(row.original)" color="primary" variant="soft" size="md">
-            Card due
+            {{ isDirectPayName(row.original.name, directPay) ? 'Account' : 'Card' }} due
           </UBadge>
           <UBadge v-else color="warning" variant="soft" size="md">
             Unpaid

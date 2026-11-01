@@ -33,6 +33,11 @@ export const allParticipantsPaid = (bill: BillLike) => bill.participants.length 
 export const onSharedCard = (bill: BillLike) => !bill.paidByCheck
 /** Bills on the Settings "Paid Directly" list (the mortgage) are paid from the shared account, never Citi. */
 export const isDirectPayName = (name: string, names: string[]) => names.some(n => n.toLowerCase() === name.toLowerCase())
+/** What paying these bills' card side pays off, for wording: Paid Directly bills are paid from the account. */
+export function payTarget(names: string[], directPay: string[]): 'card' | 'account' | 'card & account' {
+  const direct = names.filter(n => isDirectPayName(n, directPay)).length
+  return direct === 0 ? 'card' : direct === names.length ? 'account' : 'card & account'
+}
 /** Only an unpaid bill that goes on Citi can use refund credit, and only once. */
 export const canTakeCredit = (bill: BillLike, directPay: boolean) =>
   canEditBill(bill) && !bill.cardPaidAt && onSharedCard(bill) && !bill.credit && !directPay

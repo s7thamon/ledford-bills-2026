@@ -73,8 +73,8 @@ export async function transferCompleted(r: ReimbursementInfo) {
   if (!creator) return
   queueMail({
     to: creator.email,
-    subject: `Transfer Complete - "${r.name}"`,
-    lines: ['The transfer for this reimbursement was marked complete.', `Name: ${r.name}`, `Amount Owed: ${formatMoney(r.owedCents)}`],
+    subject: `Payment Sent - "${r.name}"`,
+    lines: ['The payment for this reimbursement was marked as sent. Confirm once it arrives.', `Name: ${r.name}`, `Amount Owed: ${formatMoney(r.owedCents)}`],
     action: { label: 'View Reimbursements', url: appUrl('/reimbursements') }
   })
 }

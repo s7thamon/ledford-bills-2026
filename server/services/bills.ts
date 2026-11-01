@@ -299,25 +299,26 @@ export async function markCardPaid(billId: number): Promise<BillDto> {
   return bill
 }
 
-/** Bulk pay: my unpaid shares, or the card on bills everyone has paid. Returns how many changed. */
-export async function paySelected(ids: number[], actorId: number, target: 'me' | 'card'): Promise<number> {
-  if (!ids.length) return 0
+/** Bulk pay: my unpaid shares, or the card on bills everyone has paid. Returns the names of the bills that changed. */
+export async function paySelected(ids: number[], actorId: number, target: 'me' | 'card'): Promise<string[]> {
+  if (!ids.length) return []
   const db = useDb()
   const selected = await db.query.bills.findMany({ where: inArray(bills.id, ids), columns: billColumns, with: withParticipants })
 
   if (target === 'me') {
-    const billIds = selected.filter(b => b.participants.some(p => p.userId === actorId && !p.paidAt)).map(b => b.id)
-    if (!billIds.length) return 0
+    const changed = selected.filter(b => b.participants.some(p => p.userId === actorId && !p.paidAt))
+    const billIds = changed.map(b => b.id)
+    if (!billIds.length) return []
     await db.update(billParticipants)
       .set({ paidAt: new Date() })
       .where(and(inArray(billParticipants.billId, billIds), eq(billParticipants.userId, actorId), isNull(billParticipants.paidAt)))
     for (const id of billIds) await notifyIfCardReady(id)
-    return billIds.length
+    return changed.map(b => b.name)
   }
 
-  const billIds = selected.filter(canMarkCardPaid).map(b => b.id)
-  if (billIds.length) await db.update(bills).set({ cardPaidAt: new Date() }).where(inArray(bills.id, billIds))
-  return billIds.length
+  const changed = selected.filter(canMarkCardPaid)
+  if (changed.length) await db.update(bills).set({ cardPaidAt: new Date() }).where(inArray(bills.id, changed.map(b => b.id)))
+  return changed.map(b => b.name)
 }
 
 /** Per month (YYYY-MM), bills that still have an unpaid share or an unpaid card. Months with none are left out. */

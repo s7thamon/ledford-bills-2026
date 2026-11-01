@@ -137,7 +137,7 @@ const confirmIds = computed(() => selectedItems.value.filter(canConfirm).map(i =
 async function markSelected(step: 'sent' | 'received') {
   busy.value = `bulk:${step}`
   const ids = step === 'sent' ? sendIds.value : confirmIds.value
-  const ok = await run(() => $fetch('/api/reimbursements/mark-selected', { method: 'POST', body: { ids, step } }), step === 'sent' ? 'Selected marked sent' : 'Selected marked received')
+  const ok = await run(() => $fetch('/api/reimbursements/mark-selected', { method: 'POST', body: { ids, step } }), step === 'sent' ? 'Selected marked as sent' : 'Selected marked as received')
   busy.value = null
   if (ok) await refresh()
 }
@@ -285,7 +285,7 @@ function openEdit(item: Item) {
               size="sm"
               variant="outline"
               :loading="busy === `send:${row.original.id}`"
-              @click="act(`send:${row.original.id}`, `/api/reimbursements/${row.original.id}/transfer`, 'Transfer marked complete')"
+              @click="act(`send:${row.original.id}`, `/api/reimbursements/${row.original.id}/transfer`, 'Marked as sent')"
             >
               Mark Sent
             </UButton>
@@ -293,7 +293,7 @@ function openEdit(item: Item) {
               v-if="canConfirm(row.original)"
               size="sm"
               :loading="busy === `done:${row.original.id}`"
-              @click="act(`done:${row.original.id}`, `/api/reimbursements/${row.original.id}/complete`, 'Reimbursement completed')"
+              @click="act(`done:${row.original.id}`, `/api/reimbursements/${row.original.id}/complete`, 'Marked as received')"
             >
               Confirm Received
             </UButton>

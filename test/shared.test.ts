@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { formatMoney, moneyNumber, parseAmount } from '../shared/utils/money'
 import { equalShare, isCustomSplit, splitAmounts } from '../shared/utils/split'
 import { daysInMonth, monthRange, ordinalDay, shiftMonth, todayIso, usDotDate } from '../shared/utils/dates'
-import { canAdminDeleteBill, canDeleteBill, canEditAmounts, canEditBill, canMarkCardPaid, canMarkTransferComplete, canMarkReimbursementComplete, canRemoveCredit, canTakeCredit, isDirectPayName, reimbursementStatus } from '../shared/utils/rules'
+import { canAdminDeleteBill, canDeleteBill, canEditAmounts, canEditBill, canMarkCardPaid, canMarkTransferComplete, canMarkReimbursementComplete, canRemoveCredit, canTakeCredit, isDirectPayName, payTarget, reimbursementStatus } from '../shared/utils/rules'
 import { billInTab, filterSuggestions, isBillTab, readyForCardCents, tabCounts } from '../shared/utils/bill-view'
 import { cardDue, creditFromPieces, poolsFromRefunds, settlement, shareDue, sizeBite, splitRefund } from '../shared/utils/credits'
 import { cardUnpaidCents } from '../shared/utils/bill-view'
@@ -193,6 +193,11 @@ describe('bill view', () => {
     expect(isBillTab('ready')).toBe(false)
     expect(isBillTab('theirs')).toBe(true)
     expect(isBillTab('nope')).toBe(false)
+  })
+  it('words card or account payments', () => {
+    expect(payTarget(['Citi Gas'], ['Ledford Mortgage'])).toBe('card')
+    expect(payTarget(['ledford mortgage'], ['Ledford Mortgage'])).toBe('account')
+    expect(payTarget(['Citi Gas', 'Ledford Mortgage'], ['Ledford Mortgage'])).toBe('card & account')
   })
   it('sums ready-for-card', () => {
     expect(readyForCardCents(bills)).toBe(2000)
