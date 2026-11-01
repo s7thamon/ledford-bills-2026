@@ -18,6 +18,9 @@ export function daysInMonth(month: string): number {
   return new Date(Date.UTC(y!, m!, 0)).getUTCDate()
 }
 
+/** The last 2 days of a month, when a card charge may not post until the 1st. */
+export const isMonthEnd = (iso: string) => Number(iso.slice(8, 10)) > daysInMonth(iso.slice(0, 7)) - 2
+
 /** First and last day (inclusive) of a YYYY-MM month. */
 export function monthRange(month: string): [string, string] {
   return [`${month}-01`, `${month}-${String(daysInMonth(month)).padStart(2, '0')}`]

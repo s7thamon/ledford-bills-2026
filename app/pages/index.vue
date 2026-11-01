@@ -168,13 +168,30 @@ const columns = computed<TableColumn<Bill>[]>(() => [
 const form = reactive({ name: '', amount: '' })
 const nameMatches = computed(() => filterSuggestions(suggestions.value, form.name))
 const creating = ref(false)
-async function createBill() {
+// Late-month orders often post to the card on the 1st, so offer to hold the bill until then.
+const holdOpen = ref(false)
+const thisMonthName = computed(() => monthLabel(currentMonth()).split(' ')[0])
+const nextMonthName = computed(() => monthLabel(shiftMonth(currentMonth(), 1)).split(' ')[0])
+async function createBill(hold?: boolean) {
   const amountCents = parseAmount(form.amount)
   if (!form.name.trim() || amountCents <= 0) {
     toast.add({ title: 'Enter a name and an amount above zero.', color: 'warning' })
     return
   }
+  if (hold === undefined && isMonthEnd(todayIso())) {
+    holdOpen.value = true
+    return
+  }
+  holdOpen.value = false
   creating.value = true
+  if (hold) {
+    const ok = await run(() => $fetch('/api/held-bills', { method: 'POST', body: { name: form.name, amountCents } }), `Held until ${nextMonthName.value} 1st`)
+    creating.value = false
+    if (!ok) return
+    Object.assign(form, { name: '', amount: '' })
+    await refreshHeld()
+    return
+  }
   const bill = await run(() => $fetch('/api/bills', { method: 'POST', body: { name: form.name, amountCents } }), 'Bill created')
   creating.value = false
   if (!bill) return
@@ -205,6 +222,20 @@ const paySelected = (target: 'me' | 'card') =>
 const canPaySelectedMe = computed(() => myUnpaid(selectedBills.value) > 0)
 const canPaySelectedCard = computed(() => selectedBills.value.some(canMarkCardPaid))
 
+// Held for next month
+const { data: held, refresh: refreshHeld } = await useFetch('/api/held-bills', { key: 'held-bills', default: () => [] })
+type Held = (typeof held.value)[number]
+const heldEditOpen = ref(false)
+const heldEditing = ref<Held | null>(null)
+const confirmCancelId = ref<number | null>(null)
+async function cancelHeld(h: Held) {
+  busy.value = `held:${h.id}`
+  const ok = await run(() => $fetch(`/api/held-bills/${h.id}`, { method: 'DELETE' }), `${h.name} cancelled`)
+  busy.value = null
+  confirmCancelId.value = null
+  if (ok) await refreshHeld()
+}
+
 // Modal
 const editOpen = ref(false)
 const editingId = ref<number | null>(null)
@@ -230,7 +261,7 @@ function openEdit(bill: Bill) {
         </UTooltip>
       </div>
 
-      <form class="flex flex-wrap items-center gap-3" autocomplete="off" @submit.prevent="createBill">
+      <form class="flex flex-wrap items-center gap-3" autocomplete="off" @submit.prevent="createBill()">
         <UInputMenu
           v-model="form.name"
           mode="autocomplete"
@@ -277,6 +308,38 @@ function openEdit(bill: Bill) {
           </div>
         </button>
       </UTooltip>
+    </div>
+
+    <div v-if="held.length && month === currentMonth()" class="rounded-xl border border-dashed border-violet-300 dark:border-violet-500/40 bg-violet-50/50 dark:bg-violet-500/5 px-4 py-3">
+      <div class="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-300">
+        <UIcon name="i-lucide-calendar-clock" class="size-4" />
+        Held for {{ monthLabel(held[0]!.addOn.slice(0, 7)).split(' ')[0] }} · added on the 1st · {{ held.length }} bill{{ held.length === 1 ? '' : 's' }} · {{ formatMoney(held.reduce((s, h) => s + h.amountCents, 0)) }}
+      </div>
+      <ul class="mt-1 divide-y divide-violet-200/60 dark:divide-violet-500/20">
+        <li v-for="h in held" :key="h.id" class="flex flex-wrap items-center gap-2 py-1.5">
+          <span class="font-semibold text-highlighted">{{ h.name }}</span>
+          <span class="tabular-nums text-toned">{{ formatMoney(h.amountCents) }}</span>
+          <div class="ms-auto flex items-center gap-1">
+            <template v-if="confirmCancelId === h.id">
+              <span class="text-sm text-toned">Cancel this bill?</span>
+              <UButton size="sm" color="error" class="rounded-full" :loading="busy === `held:${h.id}`" @click="cancelHeld(h)">
+                Confirm
+              </UButton>
+              <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" @click="confirmCancelId = null">
+                Keep
+              </UButton>
+            </template>
+            <template v-else>
+              <UButton size="sm" color="neutral" variant="ghost" class="rounded-full" icon="i-lucide-pencil" @click="heldEditing = h; heldEditOpen = true">
+                Edit
+              </UButton>
+              <UButton size="sm" color="error" variant="ghost" class="rounded-full" icon="i-lucide-x" @click="confirmCancelId = h.id">
+                Cancel
+              </UButton>
+            </template>
+          </div>
+        </li>
+      </ul>
     </div>
 
     <div class="surface-card overflow-hidden">
@@ -428,6 +491,27 @@ function openEdit(bill: Bill) {
 
     </div>
 
+    <HeldBillModal v-model:open="heldEditOpen" :held="heldEditing" @changed="refreshHeld" />
+    <UModal v-model:open="holdOpen" title="Add to which month?" :description="`It's the end of ${thisMonthName}. A card charge made now may not post until ${nextMonthName}.`">
+      <template #body>
+        <p class="text-sm text-toned">
+          <b class="text-highlighted">{{ form.name.trim() }}</b> · {{ formatMoney(parseAmount(form.amount)) }}
+        </p>
+        <p class="text-sm text-muted mt-2">
+          Holding keeps it out of {{ thisMonthName }}'s totals and adds it to {{ nextMonthName }}'s bills on the 1st, after the recurring bills. You can edit or cancel it until then.
+        </p>
+      </template>
+      <template #footer>
+        <div class="flex w-full justify-end gap-2">
+          <UButton color="neutral" variant="soft" @click="createBill(false)">
+            Add to {{ thisMonthName }}
+          </UButton>
+          <UButton icon="i-lucide-calendar-clock" @click="createBill(true)">
+            Hold for {{ nextMonthName }}
+          </UButton>
+        </div>
+      </template>
+    </UModal>
     <BillEditModal v-model:open="editOpen" :bill="editingBill" :users="users" :admin-mode="adminMode" :direct-pay="!!editingBill && isDirectPay(editingBill)" @changed="refreshAll" />
     <CreditPromptModal v-model:open="promptOpen" :bill="promptBill" :refunds="refunds" :users="users" @changed="refreshAll" />
     <CreditsModal v-model:open="creditsOpen" :refunds="refunds" :bills="bills" :users="users" :direct-pay="directPay" @changed="refreshAll" />

@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import type { Peer } from 'crossws'
 
 /** Client data keys to refresh: match the `key` passed to useFetch on the pages. */
-export type LiveTopic = 'bills' | 'recurring' | 'reimbursements' | 'users'
+export type LiveTopic = 'bills' | 'held-bills' | 'recurring' | 'reimbursements' | 'users'
 
 export interface LiveEvent {
   topics: LiveTopic[]

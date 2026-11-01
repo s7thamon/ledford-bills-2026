@@ -84,6 +84,16 @@ export const billParticipants = mysqlTable('bill_participants', {
   ...timestamps
 }, t => [uniqueIndex('bill_participants_unique').on(t.billId, t.userId)])
 
+/** A late-month bill held back until the 1st, when it is added to that month's bills. Not a bill until then. */
+export const heldBills = mysqlTable('held_bills', {
+  id: id(),
+  createdBy: fk('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  amountCents: cents('amount_cents'),
+  addOn: date('add_on', { mode: 'string' }).notNull(),
+  ...timestamps
+}, t => [index('held_bills_add_on_idx').on(t.addOn)])
+
 /** Money a store put back on the card for a bill; becomes credit later bills use up a bite at a time. */
 export const refunds = mysqlTable('refunds', {
   id: id(),
